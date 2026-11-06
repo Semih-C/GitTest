@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Sinyal</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Claude Sinyal">
+<meta name="theme-color" content="#c96442">
+<style>
+  :root{--bg:#f6f4ef;--card:#fff;--ink:#1f1d1a;--muted:#6f6a62;--line:#e6e1d8;--accent:#c96442;--long:#1f8a5b;--short:#c2413a;--chip:#f1ece3;--warn:#a26b00}
+  @media (prefers-color-scheme:dark){:root{--bg:#1c1b19;--card:#262421;--ink:#f1ede6;--muted:#a29c92;--line:#38352f;--chip:#302d29}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto;padding:14px 14px 60px}
+  header{display:flex;align-items:center;gap:10px}
+  .mark{width:34px;height:34px;border-radius:9px;background:var(--accent);display:grid;place-items:center;flex:none}
+  h1{font-size:19px;margin:0}
+  .muted{color:var(--muted);font-size:12.5px}
+  .refresh{margin:14px 0 4px;display:flex;flex-direction:column;align-items:stretch;gap:6px}
+  .btn{appearance:none;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font:inherit;font-weight:600;font-size:16px;padding:13px;cursor:pointer}
+  .btn:disabled{opacity:.6}
+  .last{text-align:center;font-size:13px;color:var(--muted)}
+  .times{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+  .tcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .tlabel{font-size:11.5px;color:var(--muted)}
+  .tval{font-weight:650;font-variant-numeric:tabular-nums;margin-top:2px}
+  .filters{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-bottom:12px}
+  .filters>*{min-width:0}
+  .seg{display:flex;background:var(--chip);border-radius:10px;padding:3px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;padding:7px 0;border-radius:8px;cursor:pointer}
+  .seg button.on{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+  .row{display:flex;gap:8px;align-items:center}
+  .row label{font-size:13px;color:var(--muted)}
+  input[type=range]{flex:1;accent-color:var(--accent)}
+  select,input[type=search]{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink)}
+  .count{font-size:13px;color:var(--muted);margin:2px 2px 8px}
+  .sig{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .top{display:flex;align-items:center;gap:10px}
+  .coin{font-weight:700;font-size:17px}
+  .side{font-size:12px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:99px;color:#fff}
+  .side.LONG{background:var(--long)} .side.SHORT{background:var(--short)}
+  .score{margin-left:auto;text-align:right}
+  .score b{font-size:22px;font-variant-numeric:tabular-nums}
+  .score span{color:var(--muted);font-size:13px}
+  .bar{height:5px;background:var(--chip);border-radius:9px;margin:8px 0 6px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:9px}
+  .label{font-weight:600;font-size:14px}
+  .why{font-size:13px;color:var(--muted);margin-top:2px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
+  .kv{background:var(--chip);border-radius:9px;padding:6px 8px}
+  .kv .k{font-size:11px;color:var(--muted)} .kv .v{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .tag{font-size:12px;background:var(--chip);border-radius:7px;padding:3px 7px}
+  .ok{color:var(--long)} .no{color:var(--short)} .warn{color:var(--warn)}
+  .notice{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px;margin:12px 0}
+  details{margin-top:14px;font-size:13px;color:var(--muted)} summary{cursor:pointer;color:var(--ink);font-weight:600}
+  .progress{height:6px;background:var(--chip);border-radius:9px;overflow:hidden}
+  .progress i{display:block;height:100%;background:var(--accent);transition:width .4s}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-6 4 3 7-9"/><circle cx="20" cy="6" r="1.6" fill="#fff"/></svg></div>
+    <div><h1>Claude Sinyal</h1><div class="muted">OKX USDT kaldıraçlı kontratlar · 4 saatlik tarama + saatlik onay</div></div>
+  </header>
+
+  <div class="refresh">
+    <button class="btn" id="refresh">Verileri yenile</button>
+    <div class="progress" id="prog" hidden><i id="progbar" style="width:0%"></i></div>
+    <div class="last" id="last">Yükleniyor…</div>
+    <div class="notice" id="pushbox" hidden></div>
+  </div>
+
+  <div class="times" id="times"></div>
+
+  <div class="filters">
+    <div class="seg" id="side">
+      <button data-v="ALL" class="on">Tümü</button><button data-v="LONG">Long</button><button data-v="SHORT">Short</button>
+    </div>
+    <div class="row"><label for="min">En düşük puan</label><input type="range" id="min" min="1" max="10" value="1"><b id="minv">1</b></div>
+    <div class="row">
+      <select id="sort"><option value="score">Sırala: Puan (güçlüden zayıfa)</option><option value="strength">Sırala: Sinyal gücü</option><option value="liq">Sırala: Hacim</option><option value="coin">Sırala: Coin adı</option></select>
+    </div>
+    <div class="row">
+      <select id="fam"><option value="">Tüm stratejiler</option></select>
+      <input type="search" id="q" placeholder="Coin ara (ör. BTC)">
+    </div>
+    <div class="row"><label><input type="checkbox" id="conf"> Sadece saatlik mumla onaylananlar</label></div>
+  </div>
+
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+
+  <details>
+    <summary>Puan nasıl hesaplanıyor?</summary>
+    <p>Her sinyal, aynı türdeki sinyallerin son 300 günde 494 kontrattaki gerçek sonuçlarına göre puanlanır. Komisyon ve kayma düşülmüştür. Sinyaller coinin hacmine ve BTC ile korelasyonuna göre gruplara ayrılır. Puan, eğitim (Ocak–Temmuz) ve test (son 100 gün) dönemlerinden <b>kötü olanına</b> göre verilir; az örnekli gruplar 5'e doğru çekilir.</p>
+    <p><b>Her puan, işlem başına beklenen sonucun yaklaşık 0,07R'lik (risk ettiğiniz tutarın %7'si) bir dilimidir.</b> R = stop olursanız kaybedeceğiniz tutar. Örnek: işlem başına 1$ riskle 6 puan, geçmişte ortalama +4 ile +10 sent arası kazanç demek.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0">
+      <tr><td><b>10</b></td><td>+0,30R ve üstü</td><td><b>5</b></td><td>−0,03R … +0,03R (başa baş)</td></tr>
+      <tr><td><b>9</b></td><td>+0,23R … +0,30R</td><td><b>4</b></td><td>−0,10R … −0,03R</td></tr>
+      <tr><td><b>8</b></td><td>+0,17R … +0,23R</td><td><b>3</b></td><td>−0,17R … −0,10R</td></tr>
+      <tr><td><b>7</b></td><td>+0,10R … +0,17R</td><td><b>2</b></td><td>−0,23R … −0,17R</td></tr>
+      <tr><td><b>6</b></td><td>+0,03R … +0,10R</td><td><b>1</b></td><td>−0,23R ve altı</td></tr>
+    </table>
+    <p>Şu an hiçbir sinyal türü 7'ye ulaşmıyor; en iyi gruplar 6. 4 ve altı = geçmişte zarar ettirmiş sinyal türü (bilgi için gösterilir). Saatlik mum onayı bilgi olarak gösterilir ama puanı değiştirmez: 10.316 geçmiş sinyalde test edildi, fark istatistiksel olarak anlamlı çıkmadı.</p>
+    <p>Önerilen stop 2×ATR, hedef 4×ATR (2R), en fazla 48 saat. Puan bir kazanma olasılığı değildir. Bu uygulama emir göndermez.</p>
+  </details>
+</div>
+
+<script>
+const API = "https://fzxgmkrwlrhiddqldtvo.supabase.co/functions/v1/lab-public";
+const $ = (id) => document.getElementById(id);
+let DATA = null, polling = null;
+
+async function load() {
+  const r = await fetch(API, { cache: "no-store" });
+  if (!r.ok) throw new Error("sunucu " + r.status);
+  DATA = await r.json(); render(); return DATA;
+}
+
+function stopPolling(btn) { clearInterval(polling); polling = null; btn.disabled = false; btn.textContent = "Verileri yenile"; }
+async function refresh() {
+  const btn = $("refresh"); btn.disabled = true; btn.textContent = "Tarama başlatılıyor…";
+  try {
+    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh: true }) });
+    btn.textContent = "Taranıyor… (1-2 dk)";
+    const started = Date.now();
+    clearInterval(polling);
+    polling = setInterval(() => {
+      load().then((d) => {
+        const st = d.state || {};
+        if (st.status === "done" && st.finished_ms > started - 5000) stopPolling(btn);
+      }).catch(() => {});
+      if (Date.now() - started > 6 * 60e3) stopPolling(btn);
+    }, 6000);
+  } catch (e) { $("last").textContent = "Bağlantı hatası: " + e.message; stopPolling(btn); }
+}
+
+// Notifications. On iPhone they only work after "Add to Home Screen" and opening the app from that icon.
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+function b64(u) { const p = "=".repeat((4 - u.length % 4) % 4); const r = atob((u + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); }
+async function saveSub(sub) {
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscribe: sub.toJSON() }) });
+  if (!r.ok) throw new Error("kayıt " + r.status);
+}
+async function pushState() {
+  const box = $("pushbox"); box.hidden = false;
+  if (!("serviceWorker" in navigator)) { box.textContent = "Bu tarayıcı bildirimleri desteklemiyor."; return; }
+  if (isIOS && !standalone) {
+    box.innerHTML = "<b>Uygulama olarak yüklemek ve bildirim almak için:</b> Safari'de alttaki Paylaş düğmesine (kare ve yukarı ok) basın → <b>Ana Ekrana Ekle</b> → Ekle. Sonra uygulamayı ana ekrandaki <b>Claude Sinyal</b> simgesinden açın.";
+    return;
+  }
+  if (!("PushManager" in window) || !("Notification" in window)) { box.textContent = "Bu cihazda bildirim desteklenmiyor (iPhone'da iOS 16.4 veya üstü gerekir)."; return; }
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub && Notification.permission === "granted") {
+    box.innerHTML = "🔔 Bildirimler açık. Her 4 saatlik mum kapanışından sonra (03, 07, 11, 15, 19, 23) tarama özeti gelir.";
+    saveSub(sub).catch(() => {});
+    return;
+  }
+  if (Notification.permission === "denied") { box.textContent = "Bildirim izni kapalı. iPhone Ayarlar → Bildirimler → Claude Sinyal bölümünden açabilirsiniz."; return; }
+  box.innerHTML = '<button class="btn" id="pushbtn" style="width:100%">🔔 Bildirimleri aç</button>';
+  $("pushbtn").onclick = async () => {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { box.textContent = "Bildirim izni verilmedi."; return; }
+      const { key } = await (await fetch(API + "?vapid=1")).json();
+      const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
+      await saveSub(s);
+      pushState();
+    } catch (e) { box.textContent = "Bildirim açılamadı: " + e.message; }
+  };
+}
+
+const F = { side: "ALL", min: 1, sort: "score", fam: "", q: "", conf: false };
+try { const s = JSON.parse(localStorage.getItem("labFilters") || "{}"); Object.assign(F, s); } catch {}
+
+const tr = (ms, opts) => ms ? new Date(ms).toLocaleString("tr-TR", Object.assign({ timeZone: "Europe/Istanbul" }, opts || { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })) : "–";
+const hm = (ms) => tr(ms, { hour: "2-digit", minute: "2-digit" });
+const px = (x) => x == null ? "–" : x >= 100 ? x.toFixed(2) : x >= 1 ? x.toFixed(4) : x.toPrecision(4);
+const usd = (x) => x >= 1e9 ? (x / 1e9).toFixed(1) + " Mr$" : x >= 1e6 ? (x / 1e6).toFixed(1) + " M$" : (x / 1e3).toFixed(0) + " B$";
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const scoreColor = (s) => s >= 7 ? "var(--long)" : s >= 6 ? "#5a9e3a" : s >= 5 ? "var(--warn)" : "var(--short)";
+
+
+function render() {
+  const st = DATA.state || {}, sigs = DATA.signals || [];
+  const scanning = st.status === "running";
+  $("last").innerHTML = scanning
+    ? `Tarama sürüyor: ${st.done || 0}/${st.total || "…"} kontrat · gösterilen veri ${hm(st.finished_ms)} yenilemesinden`
+    : `Son yenileme: <b>${tr(st.finished_ms)}</b> (İstanbul)`;
+  $("prog").hidden = !scanning;
+  if (scanning) $("progbar").style.width = Math.round(100 * (st.done || 0) / Math.max(1, st.total || 0)) + "%";
+  const h4o = st.h4_open_ms, h4c = st.h4_close_ms;
+  $("times").innerHTML = `
+    <div class="tcard"><div class="tlabel">Analiz edilen 4S mum</div><div class="tval">${hm(h4o)} – ${hm(h4c)}</div><div class="tlabel">kapanış ${tr(h4c, { day: "2-digit", month: "long" })}</div></div>
+    <div class="tcard"><div class="tlabel">Sonraki 4S kapanış</div><div class="tval">${hm(h4c + 4 * 3600e3)}</div><div class="tlabel">son saatlik kapanış ${hm(st.h1_close_ms)}</div></div>`;
+  const fams = [...new Map(sigs.map((s) => [s.family, s.label])).entries()];
+  const sel = $("fam"); const cur = F.fam;
+  sel.innerHTML = `<option value="">Tüm stratejiler</option>` + fams.map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  sel.value = cur;
+  // one card per coin+side, keeping the best-scored signal; flag coins with both sides
+  const sides = {}; sigs.forEach((s) => { (sides[s.symbol] = sides[s.symbol] || new Set()).add(s.side); });
+  let list = sigs.filter((s) => (F.side === "ALL" || s.side === F.side) && s.score >= F.min && (!F.fam || s.family === F.fam)
+    && (!F.q || s.symbol.toUpperCase().includes(F.q.toUpperCase())) && (!F.conf || s.confirm_1h === true));
+  const best = new Map();
+  for (const s of list) { const k = s.symbol + s.side; const b = best.get(k); if (!b) best.set(k, { ...s, others: [] }); else if (s.score > b.score) best.set(k, { ...s, others: [b, ...b.others] }); else b.others.push(s); }
+  list = [...best.values()];
+  const key = { score: (s) => -(s.score * 100 + (s.strength || 0)), strength: (s) => -(s.strength || 0), liq: (s) => -(s.liq_usd || 0), coin: (s) => s.symbol };
+  list.sort((a, b) => { const x = key[F.sort](a), y = key[F.sort](b); return x < y ? -1 : x > y ? 1 : 0; });
+  const nl = list.filter((s) => s.side === "LONG").length, ns = list.length - nl;
+  $("count").textContent = `${list.length} sinyal · ${nl} long · ${ns} short`;
+  $("list").innerHTML = list.length ? list.map((s) => {
+    const ev = s.evidence || {}, coin = s.symbol.replace("-USDT-SWAP", "");
+    const c1 = s.confirm_1h === true ? `<span class="ok">✓ Saatlik onay</span>` : s.confirm_1h === false ? `<span class="no">✗ Saatlik mum ters</span>` : `<span class="muted">Saatlik veri yok</span>`;
+    const both = sides[s.symbol] && sides[s.symbol].size > 1 ? `<span class="tag warn">Aynı coinde ters yönlü sinyal de var</span>` : "";
+    const sign = (x) => (x > 0 ? "+" : "") + Number(x).toFixed(2) + "R";
+    return `<div class="sig">
+      <div class="top"><span class="coin">${esc(coin)}</span><span class="side ${s.side}">${s.side}</span>
+        <div class="score"><b style="color:${scoreColor(s.score)}">${s.score}</b><span>/10</span></div></div>
+      <div class="bar"><i style="width:${s.score * 10}%;background:${scoreColor(s.score)}"></i></div>
+      <div class="label">${esc(s.label)}</div><div class="why">${esc(s.why)}</div>
+      <div class="grid">
+        <div class="kv"><div class="k">Fiyat</div><div class="v">${px(s.price)}</div></div>
+        <div class="kv"><div class="k">Stop</div><div class="v no">${px(s.stop)}</div></div>
+        <div class="kv"><div class="k">Hedef</div><div class="v ok">${s.target > 0 ? px(s.target) : "–"}</div></div>
+      </div>
+      <div class="tags"><span class="tag">${c1}</span><span class="tag">24s hacim ${usd(s.liq_usd || 0)}</span><span class="tag">BTC korelasyonu ${s.btc_corr}</span>${s.atr_pct > 0.1 ? `<span class="tag warn">Çok oynak: 4S ATR %${(s.atr_pct * 100).toFixed(0)}</span>` : ""}
+        <span class="tag">İşlem başı geçmiş sonuç: eğitim ${sign(ev.r_train)} · test ${sign(ev.r_test)} (${ev.n_train + ev.n_test} işlem)</span>${both}
+        ${s.others.length ? `<span class="tag">+${s.others.length} başka sinyal: ${s.others.map((o) => esc(o.label) + " " + o.score).join(", ")}</span>` : ""}</div>
+    </div>`;
+  }).join("") : `<div class="notice">Bu filtrelere uyan sinyal yok. Puan alt sınırını düşürmeyi veya filtreleri temizlemeyi deneyin.</div>`;
+}
+
+
+function bindFilters() {
+  const save = () => { try { localStorage.setItem("labFilters", JSON.stringify(F)); } catch {} if (DATA) render(); };
+  [...$("side").children].forEach((b) => b.classList.toggle("on", b.dataset.v === F.side));
+  $("side").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; F.side = b.dataset.v; [...$("side").children].forEach((x) => x.classList.toggle("on", x === b)); save(); };
+  $("min").value = F.min; $("minv").textContent = F.min;
+  $("min").oninput = (e) => { F.min = +e.target.value; $("minv").textContent = F.min; save(); };
+  $("sort").value = F.sort; $("sort").onchange = (e) => { F.sort = e.target.value; save(); };
+  $("fam").onchange = (e) => { F.fam = e.target.value; save(); };
+  $("q").value = F.q; $("q").oninput = (e) => { F.q = e.target.value.trim(); save(); };
+  $("conf").checked = F.conf; $("conf").onchange = (e) => { F.conf = e.target.checked; save(); };
+}
+
+
+(async () => {
+  bindFilters();
+  $("refresh").onclick = refresh;
+  if ("serviceWorker" in navigator) { try { await navigator.serviceWorker.register("sw.js"); } catch (e) {} }
+  pushState().catch(() => {});
+  try { await load(); } catch (e) { $("last").textContent = "Veri alınamadı: " + e.message; }
+  setInterval(() => { if (!document.hidden && !polling) load().catch(() => {}); }, 5 * 60e3);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !polling) load().catch(() => {}); });
+})();
+</script>
+</body>
+</html>
