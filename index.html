@@ -69,6 +69,8 @@
     <div><h1>Claude Sinyal</h1><div class="muted">OKX USDT kaldıraçlı kontratlar · 4 saatlik tarama + saatlik onay</div></div>
   </header>
 
+  <div class="notice" id="keybox" hidden></div>
+  <div id="main">
   <div class="refresh">
     <button class="btn" id="refresh">Verileri yenile</button>
     <div class="progress" id="prog" hidden><i id="progbar" style="width:0%"></i></div>
@@ -96,6 +98,7 @@
   <div class="count" id="count"></div>
   <div id="list"></div>
 
+  </div>
   <details>
     <summary>Puan nasıl hesaplanıyor?</summary>
     <p>Her sinyal, aynı türdeki sinyallerin son 300 günde 494 kontrattaki gerçek sonuçlarına göre puanlanır. Komisyon ve kayma düşülmüştür. Sinyaller coinin hacmine ve BTC ile korelasyonuna göre gruplara ayrılır. Puan, eğitim (Ocak–Temmuz) ve test (son 100 gün) dönemlerinden <b>kötü olanına</b> göre verilir; az örnekli gruplar 5'e doğru çekilir.</p>
@@ -116,9 +119,26 @@
 const API = "https://fzxgmkrwlrhiddqldtvo.supabase.co/functions/v1/lab-public";
 const $ = (id) => document.getElementById(id);
 let DATA = null, polling = null;
+const KEY_STORE = "claudeSinyalKey";
+function getKey() { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } }
+function setKey(k) { try { localStorage.setItem(KEY_STORE, k); } catch {} }
+// The link you receive can carry the key after "#k=" (never sent to any server); save it and clean the address bar.
+if (location.hash.startsWith("#k=")) { setKey(decodeURIComponent(location.hash.slice(3)).trim()); history.replaceState(null, "", location.pathname); }
+async function api(q, opts = {}) {
+  const r = await fetch(API + q, { ...opts, headers: { ...(opts.headers || {}), "x-lab-key": getKey() } });
+  if (r.status === 401) { try { localStorage.removeItem(KEY_STORE); } catch {} showKey("Anahtar geçersiz, lütfen tekrar girin."); throw new Error("erişim anahtarı gerekli"); }
+  return r;
+}
+function showKey(msg) {
+  const box = $("keybox"); box.hidden = false; $("main").hidden = true;
+  box.innerHTML = `<b>Claude Sinyal size özeldir.</b><div class="muted" style="margin:6px 0 10px">${msg || "Devam etmek için size verilen erişim anahtarını girin. Bir kez girmeniz yeterli."}</div>
+    <input type="password" id="keyin" placeholder="Erişim anahtarı" autocomplete="off" style="width:100%;font:inherit;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">
+    <button class="btn" id="keyok" style="width:100%;margin-top:10px">Giriş</button>`;
+  $("keyok").onclick = async () => { const k = $("keyin").value.trim(); if (!k) return; setKey(k); box.hidden = true; $("main").hidden = false; try { await load(); pushState().catch(() => {}); } catch (e) {} };
+}
 
 async function load() {
-  const r = await fetch(API, { cache: "no-store" });
+  const r = await api("", { cache: "no-store" });
   if (!r.ok) throw new Error("sunucu " + r.status);
   DATA = await r.json(); render(); return DATA;
 }
@@ -127,7 +147,7 @@ function stopPolling(btn) { clearInterval(polling); polling = null; btn.disabled
 async function refresh() {
   const btn = $("refresh"); btn.disabled = true; btn.textContent = "Tarama başlatılıyor…";
   try {
-    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh: true }) });
+    await api("", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh: true }) });
     btn.textContent = "Taranıyor… (1-2 dk)";
     const started = Date.now();
     clearInterval(polling);
@@ -146,7 +166,7 @@ const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 function b64(u) { const p = "=".repeat((4 - u.length % 4) % 4); const r = atob((u + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); }
 async function saveSub(sub) {
-  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscribe: sub.toJSON() }) });
+  const r = await api("", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscribe: sub.toJSON() }) });
   if (!r.ok) throw new Error("kayıt " + r.status);
 }
 async function pushState() {
@@ -170,7 +190,7 @@ async function pushState() {
     try {
       const perm = await Notification.requestPermission();
       if (perm !== "granted") { box.textContent = "Bildirim izni verilmedi."; return; }
-      const { key } = await (await fetch(API + "?vapid=1")).json();
+      const { key } = await (await api("?vapid=1")).json();
       const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
       await saveSub(s);
       pushState();
@@ -256,8 +276,9 @@ function bindFilters() {
   bindFilters();
   $("refresh").onclick = refresh;
   if ("serviceWorker" in navigator) { try { await navigator.serviceWorker.register("sw.js"); } catch (e) {} }
+  if (!getKey()) { showKey(); return; }
   pushState().catch(() => {});
-  try { await load(); } catch (e) { $("last").textContent = "Veri alınamadı: " + e.message; }
+  try { await load(); } catch (e) { if (getKey()) $("last").textContent = "Veri alınamadı: " + e.message; }
   setInterval(() => { if (!document.hidden && !polling) load().catch(() => {}); }, 5 * 60e3);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && !polling) load().catch(() => {}); });
 })();
