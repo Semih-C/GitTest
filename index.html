@@ -70,6 +70,13 @@
   .grid4{grid-template-columns:repeat(2,1fr)}
   @media (min-width:520px){.grid4{grid-template-columns:repeat(4,1fr)}}
   .tag.ok,.tag.no{font-weight:600}
+  .ckbtn{margin-top:9px;width:100%;appearance:none;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;padding:8px;border-radius:10px;cursor:pointer}
+  .ck{margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:13px}
+  .ck table{width:100%;border-collapse:collapse} .ck td{padding:4px 2px;border-bottom:1px solid var(--line);vertical-align:top} .ck td:first-child{width:22px;font-weight:700} .ck td.n{white-space:nowrap;font-weight:600;padding-right:8px}
+  .verdict{background:var(--chip);border-radius:9px;padding:8px 10px;margin-top:8px}
+  .chartwrap{position:relative;touch-action:pan-y}
+  .tip{position:absolute;top:2px;pointer-events:none;background:var(--ink);color:var(--bg);font-size:11.5px;padding:3px 7px;border-radius:6px;white-space:nowrap;transform:translateX(-50%)}
+  .legend{display:flex;gap:12px;font-size:12px;color:var(--muted);margin-top:4px} .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:3px;margin-right:4px}
   .perf{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
   .perf svg{display:block;width:100%;height:auto;margin-top:6px}
   .pk{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:4px}
@@ -119,8 +126,8 @@
   </div>
   <details>
     <summary>Puan ve rakamlar ne anlama geliyor?</summary>
-    <p><b>Puan (1–10):</b> Aynı türdeki sinyallerin son 300 günde 494 kontrattaki gerçek sonuçlarına bakılır (komisyon ve kayma düşülmüş). Ocak–Temmuz ve son 100 gün ayrı ayrı hesaplanır, <b>kötü olanı</b> esas alınır; az örnekli gruplar 5'e doğru çekilir. 5 = başa baş, 6 ve üstü = geçmişte kâr ettirmiş, 4 ve altı = geçmişte zarar ettirmiş tür. Her puan, risk edilen tutarın yaklaşık %7'si kadar beklenen sonuç farkıdır.</p>
-    <p><b>Çıkış planı:</b> Stop = 2×ATR. <b>Hedef 1</b>'de (stop mesafesi kadar kâr) pozisyonun yarısı satılır ve kalan yarının stopu giriş fiyatına çekilir. <b>Hedef 2</b>'de (stop mesafesinin 2 katı) kalan yarı satılır. En fazla 48 saat beklenir.</p>
+    <p><b>Puan (1–10):</b> Aynı türdeki sinyallerin son 300 günde 494 kontrattaki gerçek sonuçlarına bakılır (komisyon ve kayma düşülmüş). Ocak–Temmuz ve son 100 gün ayrı ayrı hesaplanır, <b>kötü olanı</b> esas alınır; az örnekli gruplar 5'e doğru çekilir. Şu an en yüksek puan 5. 5 = başa baş, 6 ve üstü = geçmişte kâr ettirmiş, 4 ve altı = geçmişte zarar ettirmiş tür. Her puan, risk edilen tutarın yaklaşık %7'si kadar beklenen sonuç farkıdır.</p>
+    <p><b>Çıkış planı:</b> Stop = 2×ATR, hedef = stop mesafesinin 2 katı (tek hedef, hepsi satılır). Fiyat stop mesafesi kadar lehine gidince stop, girişin %1 kâr tarafına (stop mesafesi küçükse yarısına) taşınır; böylece komisyon çıkar ve küçük kâr kilitlenir. En fazla 48 saat beklenir.</p>
     <p><b>"100$'lık işlemde"</b>: O sinyal türünde her işleme 100$'lık pozisyon (kaldıraçsız karşılığı) açılsaydı, işlem başına ortalama kaç dolar kazanılıp kaybedildiği. Kaldıraç kullanılırsa kâr da zarar da aynı oranda büyür.</p>
     <p><b>BTC korelasyonu</b> (−1 ile 1 arası): Coinin son ~2 haftada 4 saatlik hareketlerinin BTC'ye ne kadar benzediği. 1'e yakın = BTC ne yaparsa o da onu yapar; 0 = BTC'den bağımsız; eksi = ters hareket. Örn. 0,45 = orta: BTC'den etkilenir ama kendi hareketi de güçlü. Yüksek korelasyonda BTC'nin yönü sinyalden daha belirleyici olabilir.</p>
     <p><b>24s hacim</b> yanındaki yüzde, 4 saat önceki 24 saatlik hacme göre değişimdir (yeşil = arttı, kırmızı = düştü).</p>
@@ -222,6 +229,15 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const scoreColor = (s) => s >= 7 ? "var(--long)" : s >= 6 ? "#5a9e3a" : s >= 5 ? "var(--warn)" : "var(--short)";
 
 
+const OPEN = new Set();
+function checkHtml(s) {
+  const c = s.check, rows = c.rows || [], ag = rows.filter((r) => r.agree === 1).length, dis = rows.filter((r) => r.agree === -1).length;
+  const ic = (a) => a === 1 ? `<span class="ok">✓</span>` : a === -1 ? `<span class="no">✗</span>` : `<span class="muted">–</span>`;
+  const lvl = c.agree10 >= 7 ? "yüksek" : c.agree10 >= 4 ? "orta" : "düşük";
+  return `<div class="ck"><table>${rows.map((r) => `<tr><td>${ic(r.agree)}</td><td class="n">${esc(r.name)}</td><td>${esc(r.text)}</td></tr>`).join("")}</table>
+    <div class="verdict"><b>${ag} gösterge ${s.side} yönünü destekliyor, ${dis} tanesi karşı.</b> Klasik 10 indikatörde uyum: ${c.agree10}/10 (${lvl}).<br>
+    <span class="muted">Dürüst not: 494 coinde 300 günlük testte bu uyumun yüksek olması sonucu iyileştirmedi. Son 100 günde 7–10 gösterge aynı yöndeyken 100$'lık işlem başına ortalama −0,56$, 0–3 gösterge aynı yöndeyken −0,30$. Yani "göstergeler hep aynı yönde, çok güçlü" demek geçmişte işe yaramadı. Bu tabloyu bilgi olarak kullan, tek başına giriş sebebi yapma.</span></div></div>`;
+}
 function render() {
   const st = DATA.state || {}, sigs = DATA.signals || [];
   const scanning = st.status === "running";
@@ -254,7 +270,7 @@ function render() {
     const c1 = s.confirm_1h === true ? `<span class="ok">✓ Saatlik onay</span>` : s.confirm_1h === false ? `<span class="no">✗ Saatlik mum ters</span>` : `<span class="muted">Saatlik veri yok</span>`;
     const both = sides[s.symbol] && sides[s.symbol].size > 1 ? `<span class="tag warn">Aynı coinde ters yönlü sinyal de var</span>` : "";
     const m100 = (x) => x == null ? "–" : (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(2) + "$";
-    const t1 = s.tp1 > 0 ? s.tp1 : null, t2 = s.tp2 > 0 ? s.tp2 : (s.target > 0 ? s.target : null);
+    const tgt = s.tp2 > 0 ? s.tp2 : (s.target > 0 ? s.target : null);
     const ch = s.liq_change;
     const volTag = ch == null ? `<span class="tag">24s hacim ${usd(s.liq_usd || 0)}</span>`
       : `<span class="tag ${ch >= 0 ? "ok" : "no"}">24s hacim ${usd(s.liq_usd || 0)} ${ch >= 0 ? "▲" : "▼"} %${Math.abs(ch * 100).toFixed(0)} <span style="font-weight:400">(4s önceye göre)</span></span>`;
@@ -269,57 +285,80 @@ function render() {
       <div class="bar"><i style="width:${s.score * 10}%;background:${scoreColor(s.score)}"></i></div>
       <div class="note"><span class="opp ${s.side}">${s.side} fırsatı</span>${esc(note)}</div>
       <div class="sub">${esc(s.label)}</div>
-      <div class="grid grid4">
+      <div class="grid">
         <div class="kv"><div class="k">Giriş fiyatı</div><div class="v">${px(s.price)}</div></div>
         <div class="kv"><div class="k">Stop</div><div class="v no">${px(s.stop)}</div></div>
-        <div class="kv"><div class="k">Hedef 1 · yarısını sat</div><div class="v ok">${t1 ? px(t1) : "–"}</div></div>
-        <div class="kv"><div class="k">Hedef 2 · kalanı sat</div><div class="v ok">${t2 ? px(t2) : "–"}</div></div>
+        <div class="kv"><div class="k">Hedef</div><div class="v ok">${tgt ? px(tgt) : "–"}</div></div>
       </div>
-      <div class="sub">Hedef 1 gelince kalan yarının stopunu giriş fiyatına çek. En fazla 48 saat.</div>
+      ${s.lock_trigger ? `<div class="sub">🔒 Kâr kilidi: fiyat <b>${px(s.lock_trigger)}</b> seviyesine gelince stopu <b>${px(s.lock_stop)}</b>'e taşı (komisyon çıkar, küçük kâr kilitlenir). En fazla 48 saat.</div>` : ""}
       <div class="tags"><span class="tag">${c1}</span>${volTag}<span class="tag">BTC korelasyonu ${isFinite(bc) ? bc.toFixed(2) : "?"}: ${bcTxt}</span>${s.atr_pct > 0.1 ? `<span class="tag warn">Çok oynak: 4S ATR %${(s.atr_pct * 100).toFixed(0)}</span>` : ""}
         <span class="tag">${evTxt}</span>${both}
         ${s.others.length ? `<span class="tag">+${s.others.length} başka sinyal: ${s.others.map((o) => esc(o.label) + " " + o.score).join(", ")}</span>` : ""}</div>
+      ${s.check ? `<button class="ckbtn" data-ck="${esc(s.symbol + s.side)}">${OPEN.has(s.symbol + s.side) ? "Detaylı kontrolü gizle" : "🔍 Detaylı kontrol (12 gösterge)"}</button>${OPEN.has(s.symbol + s.side) ? checkHtml(s) : ""}` : ""}
     </div>`;
   }).join("") : `<div class="notice">Bu filtrelere uyan sinyal yok. Puan alt sınırını düşürmeyi veya filtreleri temizlemeyi deneyin.</div>`;
 }
 
 
-let PERF = null;
+let PERF = null, PMODE = "normal";
 async function loadPerf() {
   const box = $("tab-perf");
   if (!PERF) { box.innerHTML = `<div class="notice">Yükleniyor…</div>`; const r = await api("?perf=1", { cache: "no-store" }); PERF = await r.json(); }
   if (!PERF || !PERF.strategies) { box.innerHTML = `<div class="notice">Performans verisi yok.</div>`; return; }
-  const P = PERF, split = P.split_ms;
-  const list = [...P.strategies].sort((a, b) => b.usd_test - a.usd_test);
+  const P = PERF, weeks = P.weeks || [], split = P.split_ms;
+  const blk = (s) => PMODE === "inverse" ? s.inverse : s;
+  const list = [...P.strategies].sort((a, b) => blk(b).usd_test - blk(a).usd_test);
   const m = (x) => (x >= 0 ? "+" : "−") + Math.abs(Math.round(x)).toLocaleString("tr-TR") + "$";
   const md = (x) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2) + "$";
-  const W = 320, H = 110, pad = 4;
-  const chart = (s) => {
-    let c = 0; const pts = s.weekly.map(([t, v]) => [t, (c += v)]);
-    if (!pts.length) return "";
-    const t0 = P.from_ms, t1 = P.to_ms, ys = pts.map((p) => p[1]).concat(0);
-    const lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
-    const X = (t) => pad + (W - 2 * pad) * (t - t0) / (t1 - t0), Y = (v) => pad + (H - 2 * pad) * (hi - v) / span;
-    // cumulative change since the split, to colour the recent part
-    const before = pts.filter((p) => p[0] < split), base = before.length ? before[before.length - 1][1] : 0;
-    const recent = pts[pts.length - 1][1] - base;
-    const path = (arr) => arr.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(" ");
-    const after = pts.filter((p) => p[0] >= split); if (before.length) after.unshift(before[before.length - 1]);
-    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(s.label)} kümülatif kâr/zarar">
-      <line x1="${pad}" x2="${W - pad}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)" stroke-width="1"/>
-      <line x1="${X(split)}" x2="${X(split)}" y1="${pad}" y2="${H - pad}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="1"/>
-      <path d="${path(before.length ? before : pts.slice(0, 1))}" fill="none" stroke="var(--muted)" stroke-width="1.6"/>
-      <path d="${path(after)}" fill="none" stroke="${recent >= 0 ? "var(--long)" : "var(--short)"}" stroke-width="2.2"/>
-    </svg>`;
+  const tot = (k) => list.reduce((q, s) => q + (k === "inverse" ? s.inverse : s).usd_test, 0);
+  const seg = `<div class="seg" id="pmode" style="margin:10px 0"><button data-v="normal" class="${PMODE === "normal" ? "on" : ""}">Sinyal yönünde</button><button data-v="inverse" class="${PMODE === "inverse" ? "on" : ""}">Tersine</button><button data-v="both" class="${PMODE === "both" ? "on" : ""}">Karşılaştır</button></div>`;
+  box.innerHTML = seg + `<div class="notice" style="font-size:13px">Her sinyale <b>100$</b>'lık işlem açılmış gibi hesaplandı (494 kontrat, komisyon+kayma düşülmüş). Çıkış: tek hedef 2R, +1R'de stop giriş+%1'e (kâr kilidi), en fazla 48 saat. <b>Tersine</b> = sinyal LONG diyorsa SHORT açmak (aynı stop/hedef kuralıyla). Grafiğe dokunup parmağını kaydırarak haftalık toplamı görebilirsin. Kesikli çizginin sağı son 100 gün.<br><br>
+    Son 100 gün, 16 stratejinin toplamı: sinyal yönünde <b class="${tot("normal") >= 0 ? "ok" : "no"}">${m(tot("normal"))}</b> · tersine <b class="${tot("inverse") >= 0 ? "ok" : "no"}">${m(tot("inverse"))}</b>.<br>Not: Bazı stratejiler zaten birbirinin tersi (ör. "20 mum kırılımı LONG"un tersi = "Kırılım sonrası geri dönüş SHORT"), bu yüzden tersine çevirmek yeni bir kazanç yolu açmıyor; komisyon iki yönde de ödeniyor.</div>` +
+  list.map((s, i) => {
+    const b = blk(s);
+    const head = PMODE === "both"
+      ? `<div class="score"><b style="font-size:15px" class="${s.usd_test >= 0 ? "ok" : "no"}">${m(s.usd_test)}</b> <span class="muted">/</span> <b style="font-size:15px" class="${s.inverse.usd_test >= 0 ? "ok" : "no"}">${m(s.inverse.usd_test)}</b><div class="muted">yönünde / tersine (100 gün)</div></div>`
+      : `<div class="score"><b style="font-size:17px" class="${b.usd_test >= 0 ? "ok" : "no"}">${m(b.usd_test)}</b><div class="muted">son 100 gün</div></div>`;
+    const side = PMODE === "inverse" ? (s.side === "LONG" ? "SHORT" : "LONG") : s.side;
+    return `<div class="perf">
+    <div class="top"><span class="coin" style="font-size:15px">${esc(s.label)}</span><span class="side ${side}">${PMODE === "inverse" ? "TERS → " : ""}${side}</span>${head}</div>
+    <div class="chartwrap" data-i="${P.strategies.indexOf(s)}"><svg viewBox="0 0 320 110"></svg><div class="tip" hidden></div></div>
+    ${PMODE === "both" ? `<div class="legend"><span><i style="background:var(--accent)"></i>Sinyal yönünde</span><span><i style="background:#3b78c4"></i>Tersine</span></div>` : ""}
+    <div class="pk"><span>İşlem başı ort. (100 gün): <b class="${b.avg_test >= 0 ? "ok" : "no"}">${md(b.avg_test)}</b></span><span>Kazanan: <b>%${Math.round(b.win_test * 100)}</b></span><span>300 gün toplam: <b class="${b.usd_total >= 0 ? "ok" : "no"}">${m(b.usd_total)}</b></span><span>${b.n.toLocaleString("tr-TR")} işlem</span></div>
+  </div>`; }).join("");
+  $("pmode").onclick = (e) => { const bt = e.target.closest("button"); if (!bt) return; PMODE = bt.dataset.v; loadPerf(); };
+  box.querySelectorAll(".chartwrap").forEach((w) => drawChart(w, P.strategies[+w.dataset.i]));
+}
+function cum(a) { let c = 0; return a.map((v) => (c += v)); }
+function drawChart(w, s) {
+  const P = PERF, weeks = P.weeks, W = 320, H = 110, pad = 6, split = P.split_ms;
+  const series = PMODE === "both" ? [[cum(s.weekly), "var(--accent)"], [cum(s.inverse.weekly), "#3b78c4"]] : [[cum((PMODE === "inverse" ? s.inverse : s).weekly), null]];
+  const ys = series.flatMap(([c]) => c).concat(0), lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+  const t0 = weeks[0], t1 = weeks[weeks.length - 1];
+  const X = (t) => pad + (W - 2 * pad) * (t - t0) / (t1 - t0), Y = (v) => pad + (H - 2 * pad) * (hi - v) / span;
+  const si = weeks.findIndex((t) => t >= split);
+  const path = (c, a, b) => c.slice(a, b).map((v, k) => (k ? "L" : "M") + X(weeks[a + k]).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+  let svg = `<line x1="${pad}" x2="${W - pad}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/><line x1="${X(split)}" x2="${X(split)}" y1="${pad}" y2="${H - pad}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  for (const [c, col] of series) {
+    if (col) svg += `<path d="${path(c, 0, c.length)}" fill="none" stroke="${col}" stroke-width="2"/>`;
+    else { const rec = c[c.length - 1] - (si > 0 ? c[si - 1] : 0);
+      svg += `<path d="${path(c, 0, Math.max(1, si))}" fill="none" stroke="var(--muted)" stroke-width="1.6"/><path d="${path(c, Math.max(0, si - 1), c.length)}" fill="none" stroke="${rec >= 0 ? "var(--long)" : "var(--short)"}" stroke-width="2.2"/>`; }
+  }
+  svg += `<line class="cur" y1="${pad}" y2="${H - pad}" stroke="var(--ink)" stroke-width="1" visibility="hidden"/>`;
+  const el = w.querySelector("svg"); el.innerHTML = svg;
+  const tip = w.querySelector(".tip"), cur = el.querySelector(".cur");
+  const show = (ev) => {
+    const r = el.getBoundingClientRect(), x = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) / r.width * W;
+    let k = 0, best = 1e9; weeks.forEach((t, j) => { const dd = Math.abs(X(t) - x); if (dd < best) { best = dd; k = j; } });
+    cur.setAttribute("x1", X(weeks[k])); cur.setAttribute("x2", X(weeks[k])); cur.setAttribute("visibility", "visible");
+    const wk = (b) => b.weekly[k], f = (v) => (v >= 0 ? "+" : "−") + Math.abs(Math.round(v)).toLocaleString("tr-TR") + "$";
+    const date = new Date(weeks[k]).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", timeZone: "Europe/Istanbul" });
+    tip.textContent = PMODE === "both" ? `${date} haftası: yönünde ${f(wk(s))} · tersine ${f(wk(s.inverse))}` : `${date} haftası ${f(wk(PMODE === "inverse" ? s.inverse : s))} · toplam ${f(series[0][0][k])}`;
+    tip.hidden = false; tip.style.left = Math.min(Math.max(X(weeks[k]) / W * r.width, 90), r.width - 90) + "px";
   };
-  const allTotal = list.reduce((q, s) => q + s.usd_test, 0);
-  box.innerHTML = `<div class="notice" style="font-size:13px">Her strateji, 494 kontratta her sinyale <b>100$</b>'lık işlem açılmış gibi (komisyon ve kayma düşülmüş, 2 hedefli çıkış) hesaplandı. Çizgi, ${tr(P.from_ms, { day: "2-digit", month: "short", year: "numeric" })}'dan bugüne <b>toplam kâr/zarar</b>dır. Kesikli çizginin sağı son 100 gün; yeşil = o dönemde kazandırıyor, kırmızı = kaybettiriyor. Liste son 100 güne göre en iyiden en kötüye sıralı.<br><br>Son 100 günde tüm stratejilerin toplamı: <b class="${allTotal >= 0 ? "ok" : "no"}">${m(allTotal)}</b>. Şu an hiçbir strateji iki dönemde de kalıcı kâr göstermiyor; geçmiş performans geleceği garanti etmez.</div>` +
-  list.map((s) => `<div class="perf">
-    <div class="top"><span class="coin" style="font-size:15px">${esc(s.label)}</span><span class="side ${s.side}">${s.side}</span>
-      <div class="score"><b style="font-size:17px" class="${s.usd_test >= 0 ? "ok" : "no"}">${m(s.usd_test)}</b><div class="muted">son 100 gün</div></div></div>
-    ${chart(s)}
-    <div class="pk"><span>İşlem başı ort. (son 100 gün): <b class="${s.avg_test >= 0 ? "ok" : "no"}">${md(s.avg_test)}</b></span><span>Kazanan işlem: <b>%${Math.round(s.win_test * 100)}</b></span><span>Toplam (300 gün): <b class="${s.usd_total >= 0 ? "ok" : "no"}">${m(s.usd_total)}</b></span><span>${s.n.toLocaleString("tr-TR")} işlem</span></div>
-  </div>`).join("");
+  const hide = () => { tip.hidden = true; cur.setAttribute("visibility", "hidden"); };
+  el.addEventListener("pointerdown", show); el.addEventListener("pointermove", (e) => { if (e.pointerType !== "mouse" || e.buttons || !tip.hidden) show(e); });
+  el.addEventListener("touchmove", show, { passive: true }); el.addEventListener("pointerleave", hide); el.addEventListener("touchend", () => setTimeout(hide, 1500));
 }
 function bindTabs() {
   $("tabs").onclick = (e) => { const b = e.target.closest("button"); if (!b) return;
@@ -329,6 +368,7 @@ function bindTabs() {
 }
 
 function bindFilters() {
+  $("list").addEventListener("click", (e) => { const b = e.target.closest("[data-ck]"); if (!b) return; const k = b.dataset.ck; OPEN.has(k) ? OPEN.delete(k) : OPEN.add(k); render(); });
   const save = () => { try { localStorage.setItem("labFilters", JSON.stringify(F)); } catch {} if (DATA) render(); };
   [...$("side").children].forEach((b) => b.classList.toggle("on", b.dataset.v === F.side));
   $("side").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; F.side = b.dataset.v; [...$("side").children].forEach((x) => x.classList.toggle("on", x === b)); save(); };
