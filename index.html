@@ -75,6 +75,18 @@
   .ck table{width:100%;border-collapse:collapse} .ck td{padding:4px 2px;border-bottom:1px solid var(--line);vertical-align:top} .ck td:first-child{width:22px;font-weight:700} .ck td.n{white-space:nowrap;font-weight:600;padding-right:8px}
   .verdict{background:var(--chip);border-radius:9px;padding:8px 10px;margin-top:8px}
   .chartwrap{position:relative;touch-action:pan-y}
+  .tabs button{font-size:13.5px}
+  .lab-row{display:flex;gap:6px;align-items:center;margin:6px 0}
+  .lab-row select{flex:1;min-width:0}
+  .lab-row input[type=number]{width:74px}
+  .lab-row button,.lab-btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;padding:7px 10px;border-radius:9px;cursor:pointer}
+  .lab-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:650;width:100%;padding:11px;margin-top:8px}
+  select,input[type=number]{font:inherit;font-size:14px;padding:7px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
+  .lab-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px} .lab-grid label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+  .res table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums} .res td,.res th{padding:6px 3px;border-bottom:1px solid var(--line);text-align:right} .res td:first-child,.res th:first-child{text-align:left}
+  .vbox{border-radius:10px;padding:10px 12px;margin:8px 0;font-size:13.5px} .vbox.ok{background:color-mix(in srgb,var(--long) 14%,transparent)} .vbox.bad{background:color-mix(in srgb,var(--short) 12%,transparent)} .vbox.warn{background:var(--chip)}
+  .bar2{height:6px;background:var(--chip);border-radius:3px;overflow:hidden;margin-top:6px} .bar2 i{display:block;height:100%;background:var(--accent)}
+  .pos{font-size:12.5px;border-bottom:1px solid var(--line);padding:6px 0;display:flex;justify-content:space-between;gap:8px}
   .tip{position:absolute;top:2px;pointer-events:none;background:var(--ink);color:var(--bg);font-size:11.5px;padding:3px 7px;border-radius:6px;white-space:nowrap;transform:translateX(-50%)}
   .legend{display:flex;gap:12px;font-size:12px;color:var(--muted);margin-top:4px} .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:3px;margin-right:4px}
   .perf{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
@@ -99,8 +111,10 @@
     <div class="notice" id="pushbox" hidden></div>
   </div>
 
-  <div class="tabs" id="tabs"><button data-t="sig" class="on">Sinyaller</button><button data-t="perf">Strateji performansı</button></div>
+  <div class="tabs" id="tabs"><button data-t="sig" class="on">Sinyaller</button><button data-t="perf">Performans</button><button data-t="lab">Test</button><button data-t="live">Canlı</button></div>
   <div id="tab-perf" hidden></div>
+  <div id="tab-lab" hidden></div>
+  <div id="tab-live" hidden></div>
   <div id="tab-sig">
   <div class="times" id="times"></div>
 
@@ -135,6 +149,7 @@
   </details>
 </div>
 
+<script src="lab.js"></script>
 <script>
 const API = "https://fzxgmkrwlrhiddqldtvo.supabase.co/functions/v1/lab-public";
 const $ = (id) => document.getElementById(id);
@@ -361,10 +376,141 @@ function drawChart(w, s) {
   el.addEventListener("touchmove", show, { passive: true }); el.addEventListener("pointerleave", hide); el.addEventListener("touchend", () => setTimeout(hide, 1500));
 }
 function bindTabs() {
+  const ids = { sig: "tab-sig", perf: "tab-perf", lab: "tab-lab", live: "tab-live" };
   $("tabs").onclick = (e) => { const b = e.target.closest("button"); if (!b) return;
     [...$("tabs").children].forEach((x) => x.classList.toggle("on", x === b));
-    const p = b.dataset.t === "perf"; $("tab-perf").hidden = !p; $("tab-sig").hidden = p;
-    if (p) loadPerf().catch((er) => { $("tab-perf").innerHTML = `<div class="notice">Veri alınamadı: ${esc(er.message)}</div>`; }); };
+    for (const [k, id] of Object.entries(ids)) $(id).hidden = k !== b.dataset.t;
+    const fail = (id) => (er) => { $(id).innerHTML = `<div class="notice">Veri alınamadı: ${esc(er.message)}</div>`; };
+    if (b.dataset.t === "perf") loadPerf().catch(fail("tab-perf"));
+    if (b.dataset.t === "lab") labOpen().catch(fail("tab-lab"));
+    if (b.dataset.t === "live") loadLive().catch(fail("tab-live")); };
+}
+
+// ---------------- Test Lab ----------------
+let LABD = null, LABRUNS = 0;
+const LAB_KEY = "labCfg", LAB_CACHE = "claude-lab-data-v1";
+const PRESETS = {
+  "rsi": { name: "RSI 30'dan dönüş (LONG)", side: "LONG", conds: [{ id: "rsi_up", p: 30 }] },
+  "brk": { name: "20 mum zirve kırılımı (LONG)", side: "LONG", conds: [{ id: "brk_hi", p: 20 }] },
+  "pull": { name: "Trend içi geri çekilme (LONG)", side: "LONG", conds: [{ id: "ema_bull" }, { id: "rsi_up", p: 40 }] },
+  "bbrsi": { name: "Bollinger alt bant + RSI<30 (LONG)", side: "LONG", conds: [{ id: "bb_low", p: 2 }, { id: "rsi_lt", p: 30 }] },
+  "macd": { name: "MACD kesişimi + ADX>25 + EMA50 üstü (LONG)", side: "LONG", conds: [{ id: "macd_xup" }, { id: "adx_gt", p: 25 }, { id: "ema_above", p: 50 }] },
+  "dump": { name: "Hacim patlaması + kırmızı mum (SHORT)", side: "SHORT", conds: [{ id: "vol_gt", p: 5 }, { id: "red" }, { id: "body_gt", p: 60 }] },
+  "pump": { name: "24 saatte %15+ yükseliş, RSI>75 (SHORT)", side: "SHORT", conds: [{ id: "chg_gt", p: 15 }, { id: "rsi_gt", p: 75 }] },
+};
+function labCfg() {
+  let c = null; try { c = JSON.parse(localStorage.getItem(LAB_KEY)); } catch {}
+  return c && c.conds ? c : { side: "LONG", conds: [{ id: "rsi_up", p: 30 }], k: 2, r: 2, hold: 12, lock: true, minVol: 2e6, overlap: false };
+}
+async function labData(onP) {
+  if (LABD) return LABD;
+  const base = location.href.replace(/[#?].*$/, "").replace(/[^/]*$/, "");
+  let meta, buf;
+  try {
+    const cache = await caches.open(LAB_CACHE);
+    let m = await cache.match(base + "lab-meta.json"), d = await cache.match(base + "lab-data.bin");
+    if (!m || !d) {
+      const L = window.ClaudeLab; LABD = await L.load(base, onP);
+      try { await cache.add(base + "lab-meta.json"); await cache.add(base + "lab-data.bin"); } catch {}
+      return LABD;
+    }
+    meta = await m.json(); buf = await d.arrayBuffer();
+  } catch { LABD = await window.ClaudeLab.load(base, onP); return LABD; }
+  LABD = window.ClaudeLab.fromBuffer(meta, buf); return LABD;
+}
+async function labOpen() {
+  const box = $("tab-lab");
+  if (box.dataset.ready) return;
+  box.innerHTML = `<div class="notice" style="font-size:13px"><b>Test ortamı.</b> Koşulları seç, 494 coinin 300 günlük 4 saatlik verisinde dene. Her işlem 100$ kabul edilir; komisyon ve kayma düşülür. Sonuç iki ayrı dönemde (Ocak–Temmuz ve son 100 gün) gösterilir ve aynı coinlerde rastgele anlarda açılan işlemlerle karşılaştırılır. Test tamamen telefonda çalışır.</div>
+    <div id="lab-load"><div class="muted" style="font-size:13px">Veri hazırlanıyor (ilk seferde ~9 MB indirilir, sonra telefonda saklanır)…</div><div class="bar2"><i id="lab-prog" style="width:0%"></i></div></div>
+    <div id="lab-form" hidden></div><div id="lab-res" class="res"></div>`;
+  box.dataset.ready = "1";
+  try { await labData((x) => { const e = $("lab-prog"); if (e) e.style.width = Math.round(x * 100) + "%"; }); }
+  catch (e) { $("lab-load").innerHTML = `<div class="notice">Veri indirilemedi: ${esc(e.message)}</div>`; delete box.dataset.ready; return; }
+  $("lab-load").hidden = true; $("lab-form").hidden = false; labForm();
+}
+function labForm() {
+  const C = labCfg(), L = window.ClaudeLab, groups = {};
+  for (const c of L.CONDS) (groups[c.g] ||= []).push(c);
+  const opts = (sel) => Object.entries(groups).map(([g, a]) => `<optgroup label="${esc(g)}">${a.map((c) => `<option value="${c.id}" ${c.id === sel ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</optgroup>`).join("");
+  const byId = Object.fromEntries(L.CONDS.map((c) => [c.id, c]));
+  const row = (c, i) => { const d = byId[c.id]; return `<div class="lab-row" data-i="${i}"><select data-f="id">${opts(c.id)}</select>${d.p ? `<input type="number" data-f="p" value="${c.p ?? d.p.def}" min="${d.p.min}" max="${d.p.max}" step="${d.p.step || 1}">` : ""}<button data-del="${i}" aria-label="Koşulu sil">✕</button></div>`; };
+  $("lab-form").innerHTML = `
+    <div class="lab-row"><select id="lab-preset"><option value="">Hazır örnek seç…</option>${Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.name)}</option>`).join("")}</select></div>
+    <div class="seg" id="lab-side" style="margin:8px 0"><button data-v="LONG" class="${C.side === "LONG" ? "on" : ""}">LONG</button><button data-v="SHORT" class="${C.side === "SHORT" ? "on" : ""}">SHORT</button></div>
+    <div style="font-size:13px;font-weight:600;margin-top:4px">Giriş koşulları (hepsi aynı anda doğru olmalı)</div>
+    <div id="lab-conds">${C.conds.map(row).join("")}</div>
+    <button class="lab-btn" id="lab-add">+ Koşul ekle</button>
+    <div style="font-size:13px;font-weight:600;margin-top:12px">Çıkış ve filtre</div>
+    <div class="lab-grid">
+      <label>Stop (ATR ×)<input type="number" id="lab-k" value="${C.k}" min="0.5" max="6" step="0.25"></label>
+      <label>Hedef (stop mesafesinin katı)<input type="number" id="lab-r" value="${C.r}" min="0.25" max="6" step="0.25"></label>
+      <label>En fazla bekleme (4S mum)<input type="number" id="lab-hold" value="${C.hold}" min="1" max="42" step="1"></label>
+      <label>Min. 24s hacim<select id="lab-vol">${[[2e6, "2M$"], [10e6, "10M$"], [50e6, "50M$"], [200e6, "200M$"]].map(([v, t]) => `<option value="${v}" ${+C.minVol === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    </div>
+    <label class="tog" style="margin-top:8px;display:flex;gap:8px;align-items:center;font-size:13.5px"><input type="checkbox" id="lab-lock" ${C.lock ? "checked" : ""}> Kâr kilidi (+1R'de stopu girişin %1 kârına çek)</label>
+    <label class="tog" style="margin-top:4px;display:flex;gap:8px;align-items:center;font-size:13.5px"><input type="checkbox" id="lab-ov" ${C.overlap ? "checked" : ""}> Aynı coinde açık işlem varken yeni işleme izin ver</label>
+    <button class="lab-btn primary" id="lab-run">Testi çalıştır</button>`;
+  const save = (c) => { try { localStorage.setItem(LAB_KEY, JSON.stringify(c)); } catch {} };
+  const read = () => {
+    const c = labCfg();
+    c.conds = [...$("lab-conds").children].map((r) => { const id = r.querySelector('[data-f="id"]').value, inp = r.querySelector('[data-f="p"]'), d = byId[id]; return d.p ? { id, p: inp && inp.value !== "" ? +inp.value : d.p.def } : { id }; });
+    c.k = +$("lab-k").value || 2; c.r = +$("lab-r").value || 2; c.hold = Math.max(1, Math.min(42, Math.round(+$("lab-hold").value || 12)));
+    c.minVol = +$("lab-vol").value; c.lock = $("lab-lock").checked; c.overlap = $("lab-ov").checked; return c;
+  };
+  $("lab-side").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; const c = read(); c.side = b.dataset.v; save(c); labForm(); };
+  $("lab-add").onclick = () => { const c = read(); c.conds.push({ id: "vol_gt", p: 2 }); save(c); labForm(); };
+  $("lab-conds").onchange = (e) => { const c = read(); if (e.target.dataset.f === "id") { const i = +e.target.closest(".lab-row").dataset.i, d = byId[c.conds[i].id]; c.conds[i] = d.p ? { id: d.id, p: d.p.def } : { id: d.id }; } save(c); labForm(); };
+  $("lab-conds").onclick = (e) => { const b = e.target.closest("[data-del]"); if (!b) return; const c = read(); c.conds.splice(+b.dataset.del, 1); save(c); labForm(); };
+  $("lab-preset").onchange = (e) => { const p = PRESETS[e.target.value]; if (!p) return; const c = read(); c.side = p.side; c.conds = p.conds.map((x) => ({ ...x })); save(c); labForm(); };
+  $("lab-run").onclick = () => { const c = read(); save(c); if (!c.conds.length) { $("lab-res").innerHTML = `<div class="notice">En az bir koşul ekle.</div>`; return; }
+    $("lab-run").disabled = true; $("lab-run").textContent = "Hesaplanıyor…";
+    setTimeout(() => { try { labShow(window.ClaudeLab.run(LABD, c)); } catch (er) { $("lab-res").innerHTML = `<div class="notice">Hata: ${esc(er.message)}</div>`; }
+      $("lab-run").disabled = false; $("lab-run").textContent = "Testi çalıştır"; $("lab-res").scrollIntoView({ behavior: "smooth", block: "start" }); }, 30); };
+}
+function labShow(r) {
+  LABRUNS++;
+  const L = window.ClaudeLab, v = L.verdict(r), byId = Object.fromEntries(L.CONDS.map((c) => [c.id, c]));
+  const md = (x) => !isFinite(x) ? "–" : (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2) + "$", m0 = (x) => !isFinite(x) ? "–" : (x >= 0 ? "+" : "−") + Math.abs(Math.round(x)).toLocaleString("tr-TR") + "$";
+  const pc = (x) => isFinite(x) ? "%" + Math.round(x * 100) : "–", cls = (x) => x >= 0 ? "ok" : "no";
+  const W = 320, H = 120, pad = 6, wk = r.weeks, ys = wk.map((x) => x[1]).concat(0), lo = Math.min(...ys), hi = Math.max(...ys), sp = hi - lo || 1;
+  const X = (t) => pad + (W - 2 * pad) * (t - wk[0][0]) / (wk[wk.length - 1][0] - wk[0][0]), Y = (y) => pad + (H - 2 * pad) * (hi - y) / sp;
+  const path = wk.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(" ");
+  const desc = r.cfg.conds.map((c) => esc(byId[c.id].label) + (c.p !== undefined ? ` <b>${c.p}</b>` : "")).join(" + ");
+  $("lab-res").innerHTML = `<div class="perf" style="margin-top:12px">
+    <div style="font-size:13px"><span class="side ${r.cfg.side}">${r.cfg.side}</span> ${desc}</div>
+    <div class="vbox ${v.level}">${esc(v.text)}</div>
+    <table><tr><th>Dönem</th><th>İşlem</th><th>Ort./işlem</th><th>Kazanan</th><th>Toplam</th><th>Rastgele</th></tr>
+      <tr><td>Ocak–Temmuz</td><td>${r.train.n.toLocaleString("tr-TR")}</td><td class="${cls(r.train.avg)}">${md(r.train.avg)}</td><td>${pc(r.train.win)}</td><td class="${cls(r.train.total)}">${m0(r.train.total)}</td><td>${md(r.rnd_train.avg)}</td></tr>
+      <tr><td>Son 100 gün</td><td>${r.test.n.toLocaleString("tr-TR")}</td><td class="${cls(r.test.avg)}">${md(r.test.avg)}</td><td>${pc(r.test.win)}</td><td class="${cls(r.test.total)}">${m0(r.test.total)}</td><td>${md(r.rnd_test.avg)}</td></tr></table>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:8px"><line x1="${pad}" x2="${W - pad}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/><line x1="${X(r.split)}" x2="${X(r.split)}" y1="${pad}" y2="${H - pad}" stroke="var(--muted)" stroke-dasharray="3 3"/><path d="${path}" fill="none" stroke="${r.all.total >= 0 ? "var(--long)" : "var(--short)"}" stroke-width="2"/></svg>
+    <div class="muted" style="font-size:12px">Toplam kâr/zarar (100$/işlem). Kesikli çizginin sağı son 100 gün. "Rastgele" sütunu: aynı coinlerde, aynı çıkış kuralıyla rastgele anlarda açılan işlemlerin ortalaması.</div>
+    <div class="pk" style="margin-top:8px"><span>En iyi 5 mumun katkısı: <b class="${cls(r.top5)}">${m0(r.top5)}</b> / toplam ${m0(r.all.total)}</span><span>${r.candles.toLocaleString("tr-TR")} farklı mumda sinyal</span></div>
+    <details style="margin-top:8px"><summary style="font-size:13px">Aylık sonuçlar</summary><table>${r.months.map((x) => `<tr><td>${x.m}</td><td>${x.n}</td><td class="${cls(x.avg)}">${md(x.avg)}</td><td class="${cls(x.total)}">${m0(x.total)}</td></tr>`).join("")}</table></details>
+    <div class="muted" style="font-size:12px;margin-top:8px">Bu oturumda ${LABRUNS} test yaptın. Ne kadar çok kural denersen, şans eseri iyi görünen bir kural bulma ihtimali o kadar artar; iki dönemde de artı çıkan bir kuralı önce Canlı sekmesindeki gibi gerçek para kullanmadan takip etmek gerekir.</div>
+  </div>`;
+}
+
+// ---------------- Canlı (paper) ----------------
+const LIVE_INFO = {
+  F: { name: "Aşırı pozitif fonlama → SHORT", desc: "Fonlama oranı, o 4 saatte tüm coinlerin en yüksek %5'lik diliminde ve en az %0,03 olan coinlere SHORT. Stop 2×ATR, hedef 4×ATR, +1R'de kâr kilidi, en fazla 48 saat. Fonlama ödemeleri dahil." },
+  OI: { name: "Açık pozisyon +%20, fiyat −%5 → SHORT", desc: "Son 24 saatte açık pozisyon %20'den fazla artmış ve fiyat %5'ten fazla düşmüş coinlere SHORT. Aynı çıkış kuralı." },
+  EARLY: { name: "ChatGPT EARLY SHORT (karşılaştırma)", desc: "ChatGPT sisteminin EARLY SHORT sinyalleri, kendi çıkış kuralıyla (yarısı hedef 1, yarısı hedef 2, en fazla 7 gün). Bizim hesabımıza kayma maliyeti eklendi." },
+};
+async function loadLive() {
+  const box = $("tab-live"); box.innerHTML = `<div class="notice">Yükleniyor…</div>`;
+  const P = await (await api("?paper=1", { cache: "no-store" })).json();
+  const m0 = (x) => !isFinite(x) ? "–" : (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2) + "$", cls = (x) => x >= 0 ? "ok" : "no";
+  const dt = (ms) => ms ? tr(ms, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "–";
+  const S = P.summary || {};
+  const cards = ["F", "OI", "EARLY"].map((k) => { const s = S[k] || { closed: 0, open: 0, net: 0, unreal: 0 }; return `<div class="perf">
+    <div class="top"><span class="coin" style="font-size:15px">${esc(LIVE_INFO[k].name)}</span><div class="score"><b style="font-size:17px" class="${cls(s.net)}">${m0(+s.net)}</b><div class="muted">kapananlar</div></div></div>
+    <div class="muted" style="font-size:12.5px;margin-top:4px">${esc(LIVE_INFO[k].desc)}</div>
+    <div class="pk"><span>Kapanan: <b>${s.closed}</b></span><span>Açık: <b>${s.open}</b></span><span>Ort.: <b class="${cls(+s.avg)}">${s.avg == null ? "–" : m0(+s.avg)}</b></span><span>Kazanan: <b>${s.win == null ? "–" : "%" + Math.round(s.win * 100)}</b></span><span>Açıkların anlık durumu: <b class="${cls(+s.unreal)}">${m0(+s.unreal)}</b></span></div></div>`; }).join("");
+  const pos = (P.positions || []).slice(0, 80).map((p) => `<div class="pos"><span><b>${esc(p.symbol.replace("-USDT-SWAP", ""))}</b> <span class="muted">${p.strategy} · ${dt(p.signal_close_ms)}</span><br><span class="muted">giriş ${px(p.entry)} · stop ${px(p.stop)} · hedef ${px(p.target)}</span></span>
+    <span style="text-align:right">${p.status === "CLOSED" ? `<b class="${cls(p.net_usd)}">${m0(p.net_usd)}</b><br><span class="muted">${esc(p.exit_reason || "")}</span>` : `<span class="muted">açık</span><br><b class="${cls(p.unreal_usd)}">${m0(p.unreal_usd)}</b>`}</span></div>`).join("");
+  box.innerHTML = `<div class="notice" style="font-size:13px"><b>Gerçek emir yok.</b> Bu sekme, araştırmada iki dönemde de artı çıkan iki kuralı her 4 saatte bir canlı piyasada sanal olarak işletiyor. Her işlem 100$; komisyon, kayma ve fonlama düşülüyor. Başlangıç: ${dt(P.start_ms)} · son tarama: ${dt(P.finished_ms)}. Anlamlı bir sonuç için en az 4–8 hafta gerekir.</div>${cards}
+    <div class="perf"><div style="font-weight:650;font-size:14px;margin-bottom:4px">İşlemler</div>${pos || `<div class="muted" style="font-size:13px">Henüz işlem yok.</div>`}</div>`;
 }
 
 function bindFilters() {
