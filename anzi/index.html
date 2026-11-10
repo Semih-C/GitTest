@@ -126,6 +126,15 @@ table.mt th{text-align:right;color:var(--muted);font-weight:700;font-size:12px;p
 table.mt th:first-child,table.mt td:first-child{text-align:left}
 table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);font-weight:600;white-space:nowrap}
 
+.ch-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.legend{display:flex;gap:12px;font-size:13px;font-weight:600;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:3px;display:block}
+.ch-tip{font-size:13px;font-weight:600;color:var(--muted);min-height:20px;margin:4px 0 6px}
+.ch-tip b{color:var(--ink)}
+#chart svg{display:block;width:100%;height:auto;overflow:visible}
+#chart .col{cursor:pointer}
+#chart .col.on .hit{fill:rgba(0,0,0,.05)}
 /* Prices */
 .pform .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pform .full{grid-column:1/-1}
@@ -223,6 +232,10 @@ details.prod summary::-webkit-details-marker{display:none}
       <div class="periods" id="periods"></div>
       <div class="card net" id="netBox"></div>
       <div class="two" id="twoBox"></div>
+      <div class="card"><div class="ch-head"><p class="label" id="chTitle" style="margin:0">Gelir / Gider</p>
+        <div class="legend"><span><i style="background:var(--gelir)"></i>Gelir</span><span><i style="background:var(--gider)"></i>Gider</span></div></div>
+        <div class="ch-tip" id="chTip">Detay için bir sütuna dokunun</div>
+        <div id="chart"></div></div>
       <div class="card"><p class="label">Gider dağılımı</p><div id="giderBars"></div></div>
       <div class="card"><p class="label">Gelir dağılımı</p><div id="gelirBars"></div></div>
       <div class="card"><p class="label">Son 6 ay</p><div id="months"></div></div>
@@ -458,9 +471,57 @@ function bars(list,type,color){
   return e.map(([k,v])=>`<div class="bar"><div class="hd"><span>${esc(k)}</span><span>${money(v)} · %${Math.round(v/tot*100)}</span></div>
     <div class="tr"><div class="fl" style="width:${Math.max(3,v/max*100)}%;background:${color}"></div></div></div>`).join("");
 }
+const compact=new Intl.NumberFormat("tr-TR",{notation:"compact",maximumFractionDigits:1});
+function buckets(p){
+  const now=new Date(),out=[];
+  const day=d=>({key:ymd(d),label:String(d.getDate()),full:trDate(ymd(d)),test:k=>k===ymd(d)});
+  if(p==="today"||p==="week"){const s=new Date();s.setDate(s.getDate()-((s.getDay()+6)%7));
+    const gn=["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
+    for(let i=0;i<7;i++){const d=new Date(s);d.setDate(s.getDate()+i);const b=day(d);b.label=gn[i];out.push(b)}return{list:out,title:"Bu hafta, günlük"}}
+  if(p==="month"||p==="lastmonth"){const off=p==="month"?0:1;const y=now.getFullYear(),m=now.getMonth()-off;
+    const n=new Date(y,m+1,0).getDate();for(let i=1;i<=n;i++)out.push(day(new Date(y,m,i)));return{list:out,title:"Günlük"}}
+  let start;
+  if(p==="year")start=new Date(now.getFullYear(),0,1);
+  else{const first=txs.reduce((a,t)=>t.date&&t.date<a?t.date:a,ymd(now));const f=new Date(first+"T00:00:00");
+    start=new Date(f.getFullYear(),f.getMonth(),1);const min=new Date(now.getFullYear(),now.getMonth()-23,1);if(start<min)start=min;}
+  const end=p==="year"?new Date(now.getFullYear(),11,1):new Date(now.getFullYear(),now.getMonth(),1);
+  for(let d=new Date(start);d<=end;d.setMonth(d.getMonth()+1)){const k=d.getFullYear()+"-"+pad(d.getMonth()+1);
+    out.push({key:k,label:AYLAR[d.getMonth()],full:AYLAR[d.getMonth()]+" "+d.getFullYear(),test:x=>x.startsWith(k)})}
+  return{list:out,title:"Aylık"};
+}
+let chSel=null;
+function renderChart(){
+  const {list,title}=buckets(period);
+  $("chTitle").textContent="Gelir / Gider · "+title;
+  const data=list.map(b=>{const l=txs.filter(t=>t.date&&b.test(t.date));return Object.assign({},b,{gi:sum(l,"gelir"),ge:sum(l,"gider")})});
+  const W=Math.max(280,$("chart").clientWidth||320),H=180,L=40,R=4,T=8,B=22;
+  const raw=Math.max(1,...data.map(d=>Math.max(d.gi,d.ge)))/3,mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const stepV=[1,1.5,2,2.5,3,4,5,6,8,10].map(m=>m*mag).find(v=>v>=raw),max=stepV*3;
+  const pw=W-L-R,ph=H-T-B,cw=pw/data.length,bw=Math.max(1.5,Math.min(14,(cw*0.8-1)/2));
+  const y=v=>T+ph-v/max*ph;
+  const bar=(x,v,c)=>{if(v<=0)return"";const top=y(v),hgt=T+ph-top,r=Math.min(4,bw/2,hgt);
+    return`<path d="M${x},${T+ph}V${top+r}Q${x},${top} ${x+r},${top}H${x+bw-r}Q${x+bw},${top} ${x+bw},${top+r}V${T+ph}Z" fill="${c}"/>`};
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gelir ve gider grafiği">`;
+  for(let i=0;i<=3;i++){const v=max*i/3,yy=y(v);
+    s+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="${i?"#eee9e3":"#d9d2ca"}" stroke-width="1"/>`;
+    s+=`<text x="${L-6}" y="${yy+4}" text-anchor="end" font-size="10" fill="#7a736c">${i?compact.format(v):"0"}</text>`}
+  const step=Math.ceil(data.length/8);
+  data.forEach((d,i)=>{const cx=L+cw*i,mid=cx+cw/2;
+    s+=`<g class="col${chSel===d.key?" on":""}" data-i="${i}"><rect class="hit" x="${cx}" y="${T}" width="${cw}" height="${ph+B}" fill="transparent"/>`;
+    s+=bar(mid-bw-1,d.gi,"var(--gelir)")+bar(mid+1,d.ge,"var(--gider)");
+    if(i%step===0||data.length<=8)s+=`<text x="${mid}" y="${H-6}" text-anchor="middle" font-size="10" fill="#7a736c">${esc(d.label)}</text>`;
+    s+=`</g>`});
+  s+=`</svg>`;
+  $("chart").innerHTML=s;
+  const show=d=>{const n=d.gi-d.ge;$("chTip").innerHTML=`<b>${esc(d.full)}</b> · Gelir <b class="pos">${money(d.gi)}</b> · Gider <b class="neg">${money(d.ge)}</b> · Net <b class="${n>=0?"pos":"neg"}">${money(n)}</b>`};
+  const cur=data.find(d=>d.key===chSel);
+  if(cur)show(cur);else $("chTip").textContent=data.some(d=>d.gi||d.ge)?"Detay için bir sütuna dokunun":"Bu dönemde kayıt yok";
+  $("chart").querySelectorAll(".col").forEach(g=>g.addEventListener("click",()=>{const d=data[+g.dataset.i];chSel=d.key;
+    $("chart").querySelectorAll(".col").forEach(x=>x.classList.toggle("on",x===g));show(d)}));
+}
 function renderRapor(){
   $("periods").innerHTML=PERIODS.map(([k,l])=>`<button data-p="${k}" class="${k===period?"on":""}">${l}</button>`).join("");
-  $("periods").querySelectorAll("button").forEach(b=>b.onclick=()=>{period=b.dataset.p;renderRapor()});
+  $("periods").querySelectorAll("button").forEach(b=>b.onclick=()=>{period=b.dataset.p;chSel=null;renderRapor()});
   const list=txs.filter(t=>inPeriod(t.date,period));
   const gi=sum(list,"gelir"),ge=sum(list,"gider"),n=gi-ge;
   const marj=gi>0?Math.round(n/gi*1000)/10:null;
@@ -469,6 +530,7 @@ function renderRapor(){
     <div class="m">${marj===null?"Gelir girilmemiş":"Kâr marjı %"+String(marj).replace(".",",")} · ${list.length} kayıt</div>`;
   $("twoBox").innerHTML=`<div class="card"><p class="label">Gelir</p><div class="big pos">${money(gi)}</div></div>
     <div class="card"><p class="label">Gider</p><div class="big neg">${money(ge)}</div></div>`;
+  renderChart();
   $("giderBars").innerHTML=bars(list,"gider","var(--gider)");
   $("gelirBars").innerHTML=bars(list,"gelir","var(--gelir)");
   const now=new Date();let rows="";
