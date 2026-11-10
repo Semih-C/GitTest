@@ -136,6 +136,12 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 #chart svg{display:block;width:100%;height:auto;overflow:visible}
 #chart .col{cursor:pointer}
 #chart .col.on .hit{fill:rgba(0,0,0,.05)}
+.prodbox{margin:0 0 12px;padding:12px;border-radius:14px;background:#f8f5f1}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pgrid .full{grid-column:1/-1}
+.calc{font-size:14px;color:var(--muted);font-weight:600;margin-top:8px;line-height:1.5}
+.calc:empty{display:none}
+.calc b{color:var(--ink)}
 /* Prices */
 .pform .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pform .full{grid-column:1/-1}
@@ -219,6 +225,17 @@ details.prod summary::-webkit-details-marker{display:none}
         </div>
         <div class="amount"><input id="amt" inputmode="decimal" autocomplete="off" placeholder="0"><span>₺</span></div>
         <div class="chips" id="catChips"></div>
+        <div id="prodBox" class="prodbox">
+          <p class="label" style="margin:0 0 8px">Ürün alımıysa (isteğe bağlı)</p>
+          <div class="pgrid">
+            <input class="field full" id="tProd" list="prodList" placeholder="Ürün (ör. Somon)" maxlength="60" autocomplete="off">
+            <input class="field full" id="tSup" list="supList" placeholder="Firma / Tedarikçi" maxlength="60" autocomplete="off">
+            <input class="field" id="tQty" inputmode="decimal" placeholder="Miktar" autocomplete="off">
+            <select class="field" id="tUnit"><option value="kg">kg</option><option value="adet">adet</option><option value="lt">lt</option>
+            <option value="paket">paket</option><option value="koli">koli</option><option value="gr">gr</option></select>
+          </div>
+          <div class="calc" id="tHint"></div>
+        </div>
         <div class="row2">
           <input type="date" class="field" id="txDate">
           <input class="field" id="txNote" placeholder="Not (isteğe bağlı)" maxlength="120">
@@ -249,13 +266,15 @@ details.prod summary::-webkit-details-marker{display:none}
         <div class="grid">
           <input class="field full" id="pProd" list="prodList" placeholder="Ürün (ör. Somon)" maxlength="60">
           <input class="field full" id="pSup" list="supList" placeholder="Firma / Tedarikçi" maxlength="60">
-          <input class="field" id="pPrice" inputmode="decimal" placeholder="Fiyat ₺">
+          <input class="field" id="pPrice" inputmode="decimal" placeholder="Tutar ₺">
           <select class="field" id="pUnit">
             <option value="kg">/ kg</option><option value="adet">/ adet</option><option value="lt">/ lt</option>
             <option value="paket">/ paket</option><option value="koli">/ koli</option><option value="gr">/ gr</option>
           </select>
+          <input class="field full" id="pQty" inputmode="decimal" placeholder="Miktar (toplam tutar girdiyseniz)" autocomplete="off">
           <input type="date" class="field full" id="pDate">
         </div>
+        <div class="calc" id="pHint"></div>
         <datalist id="prodList"></datalist><datalist id="supList"></datalist>
         <button class="save" id="savePrice" style="background:var(--accent)">Fiyatı Kaydet</button>
       </div>
@@ -394,6 +413,7 @@ window.addEventListener("hashchange",route);
 function setType(t){
   entryType=t;entryCat=null;
   document.querySelectorAll(".seg button").forEach(el=>el.classList.toggle("on",el.dataset.type===t));
+  $("prodBox").classList.toggle("hidden",t!=="gider");
   const s=$("saveTx");s.className="save "+t;s.textContent=t==="gider"?"Gideri Kaydet":"Geliri Kaydet";
   renderChips();
 }
@@ -404,16 +424,55 @@ function renderChips(){
 }
 $("amt").addEventListener("keydown",e=>{if(e.key==="Enter")saveTx()});
 $("saveTx").onclick=saveTx;
+const qtyFmt=n=>n.toLocaleString("tr-TR",{maximumFractionDigits:3});
+const clean=s=>String(s||"").trim().replace(/\s+/g," ");
+function priceInfo(prod,unit){
+  const k=norm(prod);if(!k)return"";
+  const rows=prices.filter(p=>norm(p.product)===k&&(!unit||p.unit===unit)).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||b.createdAt-a.createdAt);
+  if(!rows.length)return"";
+  const last=rows[0],latest={};rows.forEach(r=>{const s=norm(r.supplier);if(!latest[s])latest[s]=r});
+  const best=Object.values(latest).sort((a,b)=>a.price-b.price)[0];
+  let t=`Son alım: <b>${money(last.price)}/${esc(last.unit)}</b> · ${esc(last.supplier)} · ${trDate(last.date)}`;
+  if(best&&norm(best.supplier)!==norm(last.supplier))t+=`<br>En ucuz: <b>${money(best.price)}/${esc(best.unit)}</b> · ${esc(best.supplier)}`;
+  return t;
+}
+function lastUnit(prod){const k=norm(prod);const r=prices.filter(p=>norm(p.product)===k).sort((a,b)=>b.createdAt-a.createdAt)[0];return r&&r.unit}
+function lastSupplier(prod){const k=norm(prod);const r=prices.filter(p=>norm(p.product)===k).sort((a,b)=>b.createdAt-a.createdAt)[0];return r&&r.supplier}
+function txHint(){
+  const prod=clean($("tProd").value),qty=parseAmount($("tQty").value),amt=parseAmount($("amt").value),unit=$("tUnit").value;
+  let t="";
+  if(amt>0&&qty>0)t+=`Birim fiyat: <b>${money(amt/qty)} / ${esc(unit)}</b> → fiyat listesine eklenecek`;
+  const info=priceInfo(prod,unit);if(info)t+=(t?"<br>":"")+info;
+  if(t&&amt>0&&qty>0){const k=norm(prod);const prev=prices.filter(p=>norm(p.product)===k&&p.unit===unit).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||b.createdAt-a.createdAt)[0];
+    if(prev){const d=Math.round((amt/qty-prev.price)/prev.price*100);if(d)t+=`<br>Önceki alıma göre <b class="${d>0?"neg":"pos"}">${d>0?"+":""}%${d}</b>`}}
+  $("tHint").innerHTML=t;
+}
+$("tProd").addEventListener("change",()=>{const u=lastUnit($("tProd").value);if(u)$("tUnit").value=u;if(!$("tSup").value){const s=lastSupplier($("tProd").value);if(s)$("tSup").value=s}
+  if(!entryCat){const k=norm($("tProd").value);const prevTx=txs.filter(t=>t.type==="gider"&&norm(t.note).startsWith(k+" ·")).sort((a,b)=>b.createdAt-a.createdAt)[0];if(prevTx){entryCat=prevTx.category;renderChips()}}
+  txHint()});
+["tProd","tQty","amt"].forEach(id=>$(id).addEventListener("input",txHint));
+$("tUnit").addEventListener("change",txHint);
 async function saveTx(){
   const amt=parseAmount($("amt").value);
   if(!(amt>0)){shake($("amt").parentElement);$("amt").focus();return}
   if(!entryCat){shake($("catChips"));toast("Kategori seçin");return}
+  const prod=clean($("tProd").value),sup=clean($("tSup").value),qty=parseAmount($("tQty").value),unit=$("tUnit").value;
+  const isBuy=entryType==="gider"&&(prod||sup||$("tQty").value.trim());
+  if(isBuy){if(!prod)return shake($("tProd"));if(!sup)return shake($("tSup"));if(!(qty>0))return shake($("tQty"))}
+  let note=$("txNote").value.trim();
+  if(isBuy)note=`${prod} · ${qtyFmt(qty)} ${unit} · ${sup}`+(note?" · "+note:"");
+  const date=$("txDate").value||today();
   const btn=$("saveTx");btn.disabled=true;
   try{
-    const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:$("txNote").value.trim(),p_date:$("txDate").value||today()});
-    txs.push(mapRow(r));renderAll();
-    toast((entryType==="gider"?"Gider":"Gelir")+" kaydedildi ✓");
-    $("amt").value="";$("txNote").value="";entryCat=null;renderChips();
+    const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:note.slice(0,200),p_date:date});
+    txs.push(mapRow(r));
+    if(isBuy){
+      try{const pr=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:Math.round(amt/qty*100)/100,p_unit:unit,p_date:date});prices.push(mapRow(pr))}
+      catch(e){toast("Gider kaydedildi ama fiyat listesine eklenemedi");}
+    }
+    renderAll();
+    toast(isBuy?"Gider + fiyat kaydedildi ✓":(entryType==="gider"?"Gider":"Gelir")+" kaydedildi ✓");
+    $("amt").value="";$("txNote").value="";$("tProd").value="";$("tSup").value="";$("tQty").value="";$("tHint").innerHTML="";entryCat=null;renderChips();
   }catch(e){toast(errMsg(e))}
   btn.disabled=false;
 }
@@ -550,9 +609,8 @@ function renderRapor(){
 }
 
 function renderFiyat(){
-  const uniq=f=>{const m=new Map();prices.forEach(p=>{const k=norm(p[f]);if(k&&!m.has(k))m.set(k,p[f].trim())});return[...m.values()].sort((a,b)=>a.localeCompare(b,"tr"))};
-  $("prodList").innerHTML=uniq("product").map(v=>`<option value="${esc(v)}">`).join("");
-  $("supList").innerHTML=uniq("supplier").map(v=>`<option value="${esc(v)}">`).join("");
+
+
   const q=norm($("pSearch").value);
   const groups={};
   prices.forEach(p=>{const k=norm(p.product)+"|"+(p.unit||"");if(!groups[k])groups[k]={name:p.product,unit:p.unit,rows:[]};groups[k].rows.push(p)});
@@ -580,20 +638,34 @@ function renderFiyat(){
   })});
 }
 $("pSearch").addEventListener("input",renderFiyat);
+function pHint(){const tot=parseAmount($("pPrice").value),q=parseAmount($("pQty").value),u=$("pUnit").value;
+  let t=tot>0?(q>0?`Birim fiyat: <b>${money(tot/q)} / ${esc(u)}</b> (${money(tot)} ÷ ${qtyFmt(q)} ${esc(u)})`:`Birim fiyat olarak kaydedilecek: <b>${money(tot)} / ${esc(u)}</b>`):"";
+  const info=priceInfo($("pProd").value,u);if(info)t+=(t?"<br>":"")+info;$("pHint").innerHTML=t}
+["pPrice","pQty","pProd"].forEach(id=>$(id).addEventListener("input",pHint));
+$("pUnit").addEventListener("change",pHint);
+$("pProd").addEventListener("change",()=>{const u=lastUnit($("pProd").value);if(u)$("pUnit").value=u;pHint()});
 $("savePrice").onclick=async()=>{
-  const prod=$("pProd").value.trim().replace(/\s+/g," "),sup=$("pSup").value.trim().replace(/\s+/g," "),pr=parseAmount($("pPrice").value);
-  if(!prod)return shake($("pProd"));if(!sup)return shake($("pSup"));if(!(pr>0))return shake($("pPrice"));
+  const prod=$("pProd").value.trim().replace(/\s+/g," "),sup=$("pSup").value.trim().replace(/\s+/g," "),tot=parseAmount($("pPrice").value),pq=parseAmount($("pQty").value);
+  if(!prod)return shake($("pProd"));if(!sup)return shake($("pSup"));if(!(tot>0))return shake($("pPrice"));
+  if($("pQty").value.trim()&&!(pq>0))return shake($("pQty"));
+  const pr=pq>0?Math.round(tot/pq*100)/100:tot;
   const btn=$("savePrice");btn.disabled=true;
   try{
     const r=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:pr,p_unit:$("pUnit").value,p_date:$("pDate").value||today()});
     prices.push(mapRow(r));renderAll();
-    toast("Fiyat kaydedildi ✓");$("pSup").value="";$("pPrice").value="";$("pSup").focus();
+    toast("Fiyat kaydedildi ✓");$("pSup").value="";$("pPrice").value="";$("pQty").value="";pHint();$("pSup").focus();
   }catch(e){toast(errMsg(e))}
   btn.disabled=false;
 };
 
+function fillLists(){
+  const uniq=f=>{const m=new Map();prices.forEach(p=>{const k=norm(p[f]);if(k&&!m.has(k))m.set(k,p[f].trim())});return[...m.values()].sort((a,b)=>a.localeCompare(b,"tr"))};
+  $("prodList").innerHTML=uniq("product").map(v=>`<option value="${esc(v)}">`).join("");
+  $("supList").innerHTML=uniq("supplier").map(v=>`<option value="${esc(v)}">`).join("");
+}
 function renderAll(){
   if(!cur)return;
+  fillLists();
   if(tab==="kayit")renderKayit();else if(tab==="rapor")renderRapor();else renderFiyat();
 }
 
