@@ -161,6 +161,10 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 .kseg button{flex:1;padding:10px 0;border-radius:12px;background:#f1ede8;font-weight:800;font-size:15px;color:var(--muted)}
 .kseg button.on{background:var(--ink);color:#fff}
 .kdvtag{font-size:11px;font-weight:700;color:var(--muted);background:#f1ede8;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle}
+.editbar{display:flex;justify-content:space-between;align-items:center;background:#fff6dc;color:#6b5200;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-weight:700;font-size:14px}
+.editbar button{background:#fff;border-radius:9px;padding:6px 12px;font-weight:800;color:var(--ink)}
+.item.tap{cursor:pointer}
+.item.editing{background:#fff6dc;border-radius:10px}
 /* Prices */
 .pform .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pform .full{grid-column:1/-1}
@@ -241,6 +245,7 @@ details.prod summary::-webkit-details-marker{display:none}
     <div id="pane-kayit">
       <div class="today" id="todayBox"></div>
       <div class="card">
+        <div id="editBar" class="editbar hidden"><span>✎ Kaydı düzenliyorsunuz</span><button id="editCancel">Vazgeç</button></div>
         <div class="seg">
           <button class="gider on" data-type="gider">− Gider</button>
           <button class="gelir" data-type="gelir">+ Gelir</button>
@@ -266,7 +271,7 @@ details.prod summary::-webkit-details-marker{display:none}
         </div>
         <button class="save gider" id="saveTx">Gideri Kaydet</button>
       </div>
-      <div class="card list"><p class="label">Son kayıtlar</p><div id="recent"></div></div>
+      <div class="card list"><p class="label">Son kayıtlar · düzeltmek için dokunun</p><div id="recent"></div></div>
     </div>
 
     <!-- RAPOR -->
@@ -407,7 +412,7 @@ async function load(b){
     dbReady=true;showNote("Veriler yüklenemedi. İnternet bağlantınızı kontrol edin.");renderAll();
   }
 }
-function subscribe(b){txs=[];prices=[];dbReady=false;hideNote();renderAll();load(b)}
+function subscribe(b){if(typeof editId!=="undefined"&&editId)endEdit();txs=[];prices=[];dbReady=false;hideNote();renderAll();load(b)}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&cur)load(cur)});
 setInterval(()=>{if(!document.hidden&&cur)load(cur)},60000);
 
@@ -440,7 +445,8 @@ function setType(t){
   entryType=t;entryCat=null;
   document.querySelectorAll(".seg button").forEach(el=>el.classList.toggle("on",el.dataset.type===t));
   $("prodBox").classList.toggle("hidden",t!=="gider");$("kdvBox").classList.toggle("hidden",t!=="gider");if(typeof drawKdv==="function")drawKdv();
-  const s=$("saveTx");s.className="save "+t;s.textContent=t==="gider"?"Gideri Kaydet":"Geliri Kaydet";
+  const s=$("saveTx");s.className="save "+t;s.textContent=editId?"Değişikliği Kaydet":(t==="gider"?"Gideri Kaydet":"Geliri Kaydet");
+  if(editId)$("prodBox").classList.add("hidden");
   renderChips();
 }
 document.querySelectorAll(".seg button").forEach(el=>el.onclick=()=>{setType(el.dataset.type);$("amt").focus()});
@@ -499,7 +505,24 @@ $("tProd").addEventListener("change",()=>{const u=lastUnit($("tProd").value);if(
   txHint()});
 ["tProd","tQty","amt"].forEach(id=>$(id).addEventListener("input",txHint));
 $("tUnit").addEventListener("change",txHint);
-let kdvRate=1,pKdvRate=1;
+let kdvRate=1,pKdvRate=1,editId=null;
+function startEdit(t){
+  editId=t.id;setType(t.type);
+  if(!catList(t.type).some(c=>c===t.category))customCats[t.type].push(t.category);
+  entryCat=t.category;addingCat=false;renderChips();
+  $("amt").value=String(t.amount).replace(".",",");$("txDate").value=t.date||today();$("txNote").value=t.note||"";
+  if(t.type==="gider")kdvRate=t.kdv==null?1:t.kdv;
+  $("editBar").classList.remove("hidden");$("prodBox").classList.add("hidden");
+  $("saveTx").textContent="Değişikliği Kaydet";drawKdv();renderKayit();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function endEdit(){
+  editId=null;$("editBar").classList.add("hidden");
+  $("amt").value="";$("txNote").value="";$("txDate").value=today();entryCat=null;
+  try{const v=localStorage.getItem("anzi-kdv");if(v!==null)kdvRate=+v}catch(e){}
+  setType(entryType);renderKayit();
+}
+$("editCancel").onclick=endEdit;
 try{const v=localStorage.getItem("anzi-kdv");if(v!==null&&!isNaN(+v))kdvRate=pKdvRate=+v}catch(e){}
 const kdvOf=(amt,k)=>k>0?amt*k/(100+k):0;
 function drawKdv(){
@@ -515,6 +538,15 @@ async function saveTx(){
   if(!(amt>0)){shake($("amt").parentElement);$("amt").focus();return}
   if(!entryCat){shake($("catChips"));toast("Kategori seçin");return}
   const prod=clean($("tProd").value),sup=clean($("tSup").value),qty=parseAmount($("tQty").value),unit=$("tUnit").value;
+  if(editId){
+    const btn=$("saveTx");btn.disabled=true;
+    try{
+      const r=await rpc("anzi_update_tx",{p_id:editId,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:$("txNote").value.trim().slice(0,200),p_date:$("txDate").value||today(),p_kdv:entryType==="gider"?kdvRate:null});
+      if(r&&r.error){toast("Kayıt bulunamadı, silinmiş olabilir");}
+      else{const i=txs.findIndex(x=>x.id===editId);if(i>=0)txs[i]=mapRow(r);toast("Kayıt güncellendi ✓");endEdit()}
+    }catch(e){toast(errMsg(e))}
+    btn.disabled=false;return;
+  }
   const isBuy=entryType==="gider"&&(prod||sup||$("tQty").value.trim());
   if(isBuy){if(!prod)return shake($("tProd"));if(!sup)return shake($("tSup"));if(!(qty>0))return shake($("tQty"))}
   let note=$("txNote").value.trim();
@@ -560,14 +592,15 @@ function renderKayit(){
   for(const t of list){
     if(t.date!==last){last=t.date;html+=`<div class="day">${t.date===td?"Bugün":t.date===yd?"Dün":trDate(t.date)}</div>`}
     const g=t.type==="gelir";
-    html+=`<div class="item"><div class="ic ${g?"gelir":"gider"}">${g?"+":"−"}</div>
+    html+=`<div class="item tap${t.id===editId?" editing":""}" data-id="${esc(t.id)}"><div class="ic ${g?"gelir":"gider"}">${g?"+":"−"}</div>
       <div class="t"><b>${esc(t.category)}${t.kdv!=null&&t.type==="gider"?`<span class="kdvtag">KDV %${t.kdv}</span>`:""}</b>${t.note?`<small>${esc(t.note)}</small>`:""}</div>
       <div class="a ${g?"gelir":"gider"}">${g?"+":"−"}${money(t.amount)}</div>
       <button class="del" data-id="${esc(t.id)}">Sil</button></div>`;
   }
   $("recent").innerHTML=html;
+  $("recent").querySelectorAll(".item.tap").forEach(el=>el.addEventListener("click",e=>{if(e.target.closest(".del"))return;const t=txs.find(x=>x.id===el.dataset.id);if(t)startEdit(t)}));
   $("recent").querySelectorAll(".del").forEach(b=>b.onclick=()=>armDelete(b,async()=>{
-    try{await rpc("anzi_delete",{p_kind:"tx",p_id:b.dataset.id});txs=txs.filter(t=>t.id!==b.dataset.id);renderAll();toast("Silindi")}catch(e){toast(errMsg(e))}
+    try{await rpc("anzi_delete",{p_kind:"tx",p_id:b.dataset.id});txs=txs.filter(t=>t.id!==b.dataset.id);if(editId===b.dataset.id)endEdit();renderAll();toast("Silindi")}catch(e){toast(errMsg(e))}
   }));
 }
 
@@ -752,7 +785,7 @@ $("pad").querySelectorAll("button").forEach(b=>b.addEventListener("pointerdown",
 document.addEventListener("keydown",e=>{if($("lock").classList.contains("hidden"))return;if(e.key==="Backspace")pressKey("del");else pressKey(e.key)});
 
 /* ---------- Version / update ---------- */
-const APP_VERSION="1.2";
+const APP_VERSION="1.3";
 $("verNo").textContent=APP_VERSION;
 const vnum=v=>String(v||"0").split(".").map(Number);
 const newer=(a,b)=>{const x=vnum(a),y=vnum(b);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0}return false};
