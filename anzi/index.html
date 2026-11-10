@@ -160,6 +160,8 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 .kseg{display:flex;gap:6px;flex:1}
 .kseg button{flex:1;padding:10px 0;border-radius:12px;background:#f1ede8;font-weight:800;font-size:15px;color:var(--muted)}
 .kseg button.on{background:var(--ink);color:#fff}
+.payseg button{font-size:13px;padding:10px 2px}
+.paytag{font-size:11px;font-weight:700;color:#3346a8;background:#e6e9f8;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle}
 .kdvtag{font-size:11px;font-weight:700;color:var(--muted);background:#f1ede8;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle}
 .editbar{display:flex;justify-content:space-between;align-items:center;background:#fff6dc;color:#6b5200;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-weight:700;font-size:14px}
 .editbar button{background:#fff;border-radius:9px;padding:6px 12px;font-weight:800;color:var(--ink)}
@@ -256,6 +258,7 @@ details.prod summary::-webkit-details-marker{display:none}
         <div class="chips" id="catChips"></div>
 <div class="kdvrow" id="kdvBox"><span class="label" style="margin:0">KDV</span><div class="kseg"><button data-k="1">%1</button><button data-k="10">%10</button><button data-k="20">%20</button><button data-k="0">%0</button></div></div>
         <div class="calc" id="kdvHint" style="margin:-4px 0 12px"></div>
+        <div class="kdvrow"><span class="label" style="margin:0">Ödeme</span><div class="kseg payseg" id="payBox"></div></div>
         <div id="prodBox" class="prodbox">
           <p class="label" style="margin:0 0 8px">Ürün alımıysa (isteğe bağlı)</p>
           <div class="pgrid">
@@ -285,6 +288,8 @@ details.prod summary::-webkit-details-marker{display:none}
         <div class="legend"><span><i style="background:var(--gelir)"></i>Gelir</span><span><i style="background:var(--gider)"></i>Gider</span></div></div>
         <div class="ch-tip" id="chTip">Detay için bir sütuna dokunun</div>
         <div id="chart"></div></div>
+      <div class="card"><p class="label">Ödeme şekline göre gider</p><div id="payBars"></div>
+        <p class="calc" style="margin-top:10px">Kredi kartıyla yapılan alımlar zaten gider olarak kayıtlı. Kart ekstresini öderken <b>tekrar gider girmeyin</b>, yoksa aynı masraf iki kez sayılır.</p></div>
       <div class="card"><p class="label">Gider dağılımı</p><div id="giderBars"></div></div>
       <div class="card"><p class="label">Gelir dağılımı</p><div id="gelirBars"></div></div>
       <div class="card"><p class="label">Son 6 ay</p><div id="months"></div></div>
@@ -508,12 +513,22 @@ $("tProd").addEventListener("change",()=>{const u=lastUnit($("tProd").value);if(
 ["tProd","tQty","amt"].forEach(id=>$(id).addEventListener("input",txHint));
 $("tUnit").addEventListener("change",txHint);
 let kdvRate=1,pKdvRate=1,editId=null;
+const PAYS={gider:[["nakit","Nakit"],["kart","Kredi kartı"],["havale","Havale"],["cari","Veresiye"]],
+            gelir:[["nakit","Nakit"],["kart","Kart"],["havale","Havale"],["online","Online"]]};
+const PAYNAME={nakit:"Nakit",kart:"Kredi kartı",havale:"Havale/EFT",cari:"Veresiye",online:"Online"};
+let paySel={gider:"nakit",gelir:"nakit"};
+try{const v=JSON.parse(localStorage.getItem("anzi-pay")||"null");if(v)paySel=Object.assign(paySel,v)}catch(e){}
+function drawPay(){
+  $("payBox").innerHTML=PAYS[entryType].map(([k,l])=>`<button data-p="${k}" class="${paySel[entryType]===k?"on":""}">${l}</button>`).join("");
+  $("payBox").querySelectorAll("button").forEach(b=>b.onclick=()=>{paySel[entryType]=b.dataset.p;if(!editId){try{localStorage.setItem("anzi-pay",JSON.stringify(paySel))}catch(e){}}drawPay()});
+}
 function startEdit(t){
   editId=t.id;setType(t.type);
   if(!catList(t.type).some(c=>c===t.category))customCats[t.type].push(t.category);
   entryCat=t.category;addingCat=false;renderChips();
   $("amt").value=String(t.amount).replace(".",",");$("txDate").value=t.date||today();$("txNote").value=t.note||"";
   if(t.type==="gider")kdvRate=t.kdv==null?1:t.kdv;
+  if(t.pay)paySel[t.type]=t.pay;
   $("editBar").classList.remove("hidden");$("prodBox").classList.add("hidden");
   $("saveTx").textContent="Değişikliği Kaydet";drawKdv();renderKayit();
   window.scrollTo({top:0,behavior:"smooth"});
@@ -522,6 +537,7 @@ function endEdit(){
   editId=null;$("editBar").classList.add("hidden");
   $("amt").value="";$("txNote").value="";$("txDate").value=today();entryCat=null;
   try{const v=localStorage.getItem("anzi-kdv");if(v!==null)kdvRate=+v}catch(e){}
+  try{const v=JSON.parse(localStorage.getItem("anzi-pay")||"null");if(v)paySel=Object.assign(paySel,v)}catch(e){}
   setType(entryType);renderKayit();
 }
 $("editCancel").onclick=endEdit;
@@ -529,6 +545,7 @@ try{const v=localStorage.getItem("anzi-kdv");if(v!==null&&!isNaN(+v))kdvRate=pKd
 const kdvOf=(amt,k)=>k>0?amt*k/(100+k):0;
 const exVat=p=>p.kdv>0?`<small class="exv">KDV hariç ${money(p.price-kdvOf(p.price,p.kdv))}</small>`:"";
 function drawKdv(){
+  drawPay();
   [["kdvBox",kdvRate],["pKdvBox",pKdvRate]].forEach(([id,v])=>$(id).querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.k===v)));
   const amt=parseAmount($("amt").value);
   $("kdvHint").innerHTML=entryType==="gider"&&amt>0?`KDV: <b>${money(kdvOf(amt,kdvRate))}</b> · KDV hariç: <b>${money(amt-kdvOf(amt,kdvRate))}</b>`:"";
@@ -544,7 +561,7 @@ async function saveTx(){
   if(editId){
     const btn=$("saveTx");btn.disabled=true;
     try{
-      const r=await rpc("anzi_update_tx",{p_id:editId,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:$("txNote").value.trim().slice(0,200),p_date:$("txDate").value||today(),p_kdv:entryType==="gider"?kdvRate:null});
+      const r=await rpc("anzi_update_tx",{p_id:editId,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:$("txNote").value.trim().slice(0,200),p_date:$("txDate").value||today(),p_kdv:entryType==="gider"?kdvRate:null,p_pay:paySel[entryType]});
       if(r&&r.error){toast("Kayıt bulunamadı, silinmiş olabilir");}
       else{const i=txs.findIndex(x=>x.id===editId);if(i>=0)txs[i]=mapRow(r);toast("Kayıt güncellendi ✓");endEdit();load(cur)}
     }catch(e){toast(errMsg(e))}
@@ -557,7 +574,7 @@ async function saveTx(){
   const date=$("txDate").value||today();
   const btn=$("saveTx");btn.disabled=true;
   try{
-    const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:note.slice(0,200),p_date:date,p_kdv:entryType==="gider"?kdvRate:null});
+    const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:note.slice(0,200),p_date:date,p_kdv:entryType==="gider"?kdvRate:null,p_pay:paySel[entryType]});
     txs.push(mapRow(r));
     if(isBuy){
       try{const pr=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:Math.round(amt/qty*100)/100,p_unit:unit,p_date:date,p_kdv:kdvRate,p_qty:qty,p_tx_id:r.id});prices.push(mapRow(pr))}
@@ -596,7 +613,7 @@ function renderKayit(){
     if(t.date!==last){last=t.date;html+=`<div class="day">${t.date===td?"Bugün":t.date===yd?"Dün":trDate(t.date)}</div>`}
     const g=t.type==="gelir";
     html+=`<div class="item tap${t.id===editId?" editing":""}" data-id="${esc(t.id)}"><div class="ic ${g?"gelir":"gider"}">${g?"+":"−"}</div>
-      <div class="t"><b>${esc(t.category)}${t.kdv!=null&&t.type==="gider"?`<span class="kdvtag">KDV %${t.kdv}</span>`:""}</b>${t.note?`<small>${esc(t.note)}</small>`:""}</div>
+      <div class="t"><b>${esc(t.category)}${t.kdv!=null&&t.type==="gider"?`<span class="kdvtag">KDV %${t.kdv}</span>`:""}${t.pay?`<span class="paytag">${PAYNAME[t.pay]||esc(t.pay)}</span>`:""}</b>${t.note?`<small>${esc(t.note)}</small>`:""}</div>
       <div class="a ${g?"gelir":"gider"}">${g?"+":"−"}${money(t.amount)}</div>
       <button class="del" data-id="${esc(t.id)}">Sil</button></div>`;
   }
@@ -694,6 +711,7 @@ function renderRapor(){
     <div class="card"><p class="label">Gider</p><div class="big neg">${money(ge)}</div>${kd>0?`<div class="calc" style="margin-top:4px">İçindeki KDV: <b>${money(kd)}</b><br>KDV hariç: <b>${money(ge-kd)}</b></div>`:""}</div>`;
   renderChart();
   $("giderBars").innerHTML=bars(list,"gider","var(--gider)");
+  $("payBars").innerHTML=bars(list.filter(t=>t.type==="gider").map(t=>Object.assign({},t,{category:PAYNAME[t.pay]||"Belirtilmemiş"})),"gider","var(--accent)");
   $("gelirBars").innerHTML=bars(list,"gelir","var(--gelir)");
   const now=new Date();let rows="";
   for(let i=0;i<6;i++){
@@ -788,7 +806,7 @@ $("pad").querySelectorAll("button").forEach(b=>b.addEventListener("pointerdown",
 document.addEventListener("keydown",e=>{if($("lock").classList.contains("hidden"))return;if(e.key==="Backspace")pressKey("del");else pressKey(e.key)});
 
 /* ---------- Version / update ---------- */
-const APP_VERSION="1.4";
+const APP_VERSION="1.5";
 $("verNo").textContent=APP_VERSION;
 const vnum=v=>String(v||"0").split(".").map(Number);
 const newer=(a,b)=>{const x=vnum(a),y=vnum(b);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0}return false};
