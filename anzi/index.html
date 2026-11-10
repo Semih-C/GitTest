@@ -76,6 +76,9 @@ nav.tabs button.on{color:var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
 .chip{padding:9px 13px;border-radius:999px;background:#f1ede8;font-size:14px;font-weight:600}
 .chip.on{background:var(--ink);color:#fff}
+.chip.addc{background:transparent;border:1.5px dashed #cfc7bd;color:var(--muted)}
+.newcat{display:flex;gap:6px;flex:1 1 100%}
+.newcat .field{flex:1;padding:9px 12px;border-radius:999px;font-size:14px}
 .row2{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
 .field{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px;background:#fff;outline:0;font-size:15px}
 .field:focus{border-color:var(--ink)}
@@ -312,7 +315,7 @@ details.prod summary::-webkit-details-marker{display:none}
 (function(){
 const BR={anzi:"Anzi Sushi",ogi:"Ogi Moji"};
 const CATS={
-  gider:["Balık / Deniz ürünü","Pirinç & Kuru gıda","Sebze & Meyve","Sos & Baharat","Ambalaj","Personel","Kira","Fatura","Komisyon","Diğer"],
+  gider:["Balık / Deniz ürünü","Pirinç & Kuru gıda","Sebze & Meyve","Sos & Baharat","Ambalaj","Personel","Kira","Fatura","Yakıt","Komisyon","Diğer"],
   gelir:["Salon","Paket servis","Yemeksepeti","Getir","Trendyol Yemek","Diğer"]
 };
 const PERIODS=[["today","Bugün"],["week","Bu hafta"],["month","Bu ay"],["lastmonth","Geçen ay"],["year","Bu yıl"],["all","Tümü"]];
@@ -418,9 +421,28 @@ function setType(t){
   renderChips();
 }
 document.querySelectorAll(".seg button").forEach(el=>el.onclick=()=>{setType(el.dataset.type);$("amt").focus()});
+let customCats={gider:[],gelir:[]},addingCat=false;
+function catList(t){
+  const base=CATS[t].filter(c=>c!=="Diğer"),seen=new Set(base.map(norm)),cnt={};
+  txs.filter(x=>x.type===t&&x.category&&!seen.has(norm(x.category))&&norm(x.category)!=="diğer").forEach(x=>{const k=norm(x.category);cnt[k]=cnt[k]||{n:0,name:x.category};cnt[k].n++});
+  const used=Object.values(cnt).sort((a,b)=>b.n-a.n).map(x=>x.name);
+  used.forEach(c=>seen.add(norm(c)));
+  const extra=customCats[t].filter(c=>!seen.has(norm(c)));
+  return[...base,...used,...extra,"Diğer"];
+}
 function renderChips(){
-  $("catChips").innerHTML=CATS[entryType].map(c=>`<button class="chip${c===entryCat?" on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("");
-  $("catChips").querySelectorAll(".chip").forEach(el=>el.onclick=()=>{entryCat=entryCat===el.dataset.c?null:el.dataset.c;renderChips()});
+  const list=catList(entryType);
+  $("catChips").innerHTML=list.map(c=>`<button class="chip${c===entryCat?" on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")+
+    (addingCat?`<span class="newcat"><input id="newCat" class="field" placeholder="Yeni kategori" maxlength="40" autocomplete="off"><button class="chip on" id="newCatOk">Ekle</button></span>`
+      :`<button class="chip addc" id="addCat">+ Yeni kategori</button>`);
+  $("catChips").querySelectorAll(".chip[data-c]").forEach(el=>el.onclick=()=>{entryCat=entryCat===el.dataset.c?null:el.dataset.c;renderChips()});
+  if(addingCat){
+    const inp=$("newCat");inp.focus();
+    const ok=()=>{const v=clean(inp.value);addingCat=false;
+      if(v){const ex=catList(entryType).find(c=>norm(c)===norm(v));if(!ex)customCats[entryType].push(v);entryCat=ex||v}
+      renderChips()};
+    $("newCatOk").onclick=ok;inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();ok()}else if(e.key==="Escape"){addingCat=false;renderChips()}});
+  }else $("addCat").onclick=()=>{addingCat=true;renderChips()};
 }
 $("amt").addEventListener("keydown",e=>{if(e.key==="Enter")saveTx()});
 $("saveTx").onclick=saveTx;
@@ -488,6 +510,7 @@ function sortTx(a){return a.slice().sort((x,y)=>(y.date||"").localeCompare(x.dat
 function sum(list,type){return list.reduce((s,t)=>s+(t.type===type?(+t.amount||0):0),0)}
 
 function renderKayit(){
+  if(!addingCat)renderChips();
   const td=today(),tl=txs.filter(t=>t.date===td);
   const gi=sum(tl,"gelir"),ge=sum(tl,"gider"),n=gi-ge;
   $("todayBox").innerHTML=`
