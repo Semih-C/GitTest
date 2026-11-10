@@ -9,12 +9,32 @@ jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with: { ref: gh-pages }
       - run: |
-          mkdir -p anzi
-          curl -fsSL -A "Mozilla/5.0" https://images.migrosone.com/yemek/logo/46755/46755-81d5ba.jpg -o anzi/logo-anzi.jpg
-          curl -fsSL -A "Mozilla/5.0" https://images.migrosone.com/yemek/logo/59479/59479-6796ba.jpg -o anzi/logo-ogi.jpg
-          file anzi/logo-*.jpg
-          git config user.name "github-actions"; git config user.email "actions@github.com"
-          git add anzi/logo-*.jpg && git commit -m "Anzi: sube logolari" && git push
+          mkdir -p out && cd out
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+          get(){ curl -fsSL -A "$UA" -H "Accept-Language: tr-TR,tr" --max-time 30 "$2" -o "$1.html" || echo "FAIL $1" >> log.txt; }
+          get ys-anzi https://www.yemeksepeti.com/restaurant/ygnc/anzi-sushi-ygnc
+          get ys-ogi https://www.yemeksepeti.com/restaurant/d7ut/ogi-moji-sushi-and-noddle-d7ut
+          get getir-anzi https://getir.com/yemek/restoran/anzi-sushi-noodles-pendik-seyhli-mah-pendik-istanbul/
+          get qr-anzi https://qrdos.tr/anzi-sushi
+          get ty-anzi "https://tgoyemek.com/arama?q=anzi%20sushi"
+          get ty-ogi "https://tgoyemek.com/arama?q=ogi%20moji"
+          get tyy-anzi "https://www.trendyol.com/yemek/arama?q=anzi%20sushi"
+          get yx-ogi https://yandex.com.tr/maps/org/ogi_moji_sushi_noodle/39240214435/
+          get yx-anzi https://yandex.com.tr/maps/org/anzi_sushi/94213373401/
+          ls -la >> log.txt
+          i=0
+          for f in *.html; do
+            grep -oE 'https?:[^"'"'"' )\\]+\.(png|jpe?g|webp|svg)[^"'"'"' )\\]*' "$f" | grep -iE 'logo|og|avatar|vendor|restaurant|brand|merchant' | sort -u | head -15 > "$f.urls"
+            grep -oE 'og:image"[^>]*content="[^"]+"|content="[^"]+"[^>]*og:image' "$f" | head -3 >> "$f.urls"
+            echo "== $f" >> log.txt; cat "$f.urls" >> log.txt
+            n=0
+            for u in $(grep -oE 'https?://[^"]+' "$f.urls" | head -6); do
+              n=$((n+1)); curl -fsSL -A "$UA" --max-time 20 "$u" -o "img-${f%.html}-$n" && echo "img-${f%.html}-$n <- $u" >> log.txt
+            done
+          done
+          rm -f *.html
+          git init -q; git checkout -q -b anzi-tmp
+          git config user.name gha; git config user.email gha@example.com
+          git add -A; git commit -qm tmp
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" anzi-tmp
