@@ -169,6 +169,13 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 .item.editing{background:#fff6dc;border-radius:10px}
 .exv{display:block;font-size:12px;font-weight:600;color:var(--muted);text-align:right;margin-top:1px}
 .sup{align-items:flex-start}.sup .p{text-align:right}
+.dayrow{display:flex;align-items:center;gap:10px;padding:13px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.dayrow .dl{flex:1;min-width:0}.dayrow .dl b{display:block;font-size:15px}.dayrow .dl small{color:var(--muted);font-size:12px;font-weight:600}
+.dayrow .dr{display:flex;flex-direction:column;align-items:flex-end;font-weight:800;font-size:14px;white-space:nowrap}
+.chev{font-size:22px;color:var(--muted);transition:transform .15s;width:14px;text-align:center}
+.dayrow.open .chev{transform:rotate(90deg)}
+.dayitems{padding:0 0 4px 10px;border-left:3px solid var(--line);margin:4px 0 8px}
+.more{width:100%;margin-top:10px;padding:12px;border-radius:12px;background:#f1ede8;font-weight:700;color:var(--muted)}
 /* Prices */
 .pform .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pform .full{grid-column:1/-1}
@@ -276,7 +283,7 @@ details.prod summary::-webkit-details-marker{display:none}
         </div>
         <button class="save gider" id="saveTx">Gideri Kaydet</button>
       </div>
-      <div class="card list"><p class="label">Son kayıtlar · düzeltmek için dokunun</p><div id="recent"></div></div>
+      <div class="card list"><p class="label">Kayıtlar · güne dokunun, düzeltmek için kayda dokunun</p><div id="recent"></div></div>
     </div>
 
     <!-- RAPOR -->
@@ -597,6 +604,7 @@ function armDelete(btn,fn){
 function sortTx(a){return a.slice().sort((x,y)=>(y.date||"").localeCompare(x.date||"")||(y.createdAt||0)-(x.createdAt||0))}
 function sum(list,type){return list.reduce((s,t)=>s+(t.type===type?(+t.amount||0):0),0)}
 
+let openDays=new Set(),showDays=14;
 function renderKayit(){
   if(!addingCat)renderChips();
   const td=today(),tl=txs.filter(t=>t.date===td);
@@ -605,19 +613,33 @@ function renderKayit(){
     <div class="mini"><div class="k">Bugün gelir</div><div class="v pos">${money(gi)}</div></div>
     <div class="mini"><div class="k">Bugün gider</div><div class="v neg">${money(ge)}</div></div>
     <div class="mini"><div class="k">Bugün net</div><div class="v ${n>=0?"pos":"neg"}">${money(n)}</div></div>`;
-  const list=sortTx(txs).slice(0,40);
-  if(!list.length){$("recent").innerHTML=`<div class="empty">${dbReady?"Henüz kayıt yok. Yukarıdan ilk kaydı girin.":"Yükleniyor…"}</div>`;return}
+  const all=sortTx(txs);
+  if(!all.length){$("recent").innerHTML=`<div class="empty">${dbReady?"Henüz kayıt yok. Yukarıdan ilk kaydı girin.":"Yükleniyor…"}</div>`;return}
   const y=new Date();y.setDate(y.getDate()-1);const yd=ymd(y);
-  let html="",last=null;
-  for(const t of list){
-    if(t.date!==last){last=t.date;html+=`<div class="day">${t.date===td?"Bugün":t.date===yd?"Dün":trDate(t.date)}</div>`}
+  const days=[];const byDay={};
+  all.forEach(t=>{if(!byDay[t.date]){byDay[t.date]=[];days.push(t.date)}byDay[t.date].push(t)});
+  const editDay=editId&&(txs.find(x=>x.id===editId)||{}).date;
+  if(editDay)openDays.add(editDay);
+  let html="";
+  days.slice(0,showDays).forEach(d=>{
+    const l=byDay[d],dg=sum(l,"gelir"),dd=sum(l,"gider"),open=openDays.has(d);
+    html+=`<div class="dayrow${open?" open":""}" data-d="${d}"><div class="dl"><b>${d===td?"Bugün":d===yd?"Dün":trDate(d)}</b><small>${l.length} kayıt</small></div>
+      <div class="dr">${dg?`<span class="pos">+${money(dg)}</span>`:""}${dd?`<span class="neg">−${money(dd)}</span>`:""}</div><span class="chev">›</span></div>`;
+    if(!open)return;
+    html+=`<div class="dayitems">`;
+    for(const t of l){
     const g=t.type==="gelir";
     html+=`<div class="item tap${t.id===editId?" editing":""}" data-id="${esc(t.id)}"><div class="ic ${g?"gelir":"gider"}">${g?"+":"−"}</div>
       <div class="t"><b>${esc(t.category)}${t.kdv!=null&&t.type==="gider"?`<span class="kdvtag">KDV %${t.kdv}</span>`:""}${t.pay?`<span class="paytag">${PAYNAME[t.pay]||esc(t.pay)}</span>`:""}</b>${t.note?`<small>${esc(t.note)}</small>`:""}</div>
       <div class="a ${g?"gelir":"gider"}">${g?"+":"−"}${money(t.amount)}</div>
       <button class="del" data-id="${esc(t.id)}">Sil</button></div>`;
-  }
+    }
+    html+=`</div>`;
+  });
+  if(days.length>showDays)html+=`<button class="more" id="moreDays">Daha eski günleri göster (${days.length-showDays})</button>`;
   $("recent").innerHTML=html;
+  $("recent").querySelectorAll(".dayrow").forEach(el=>el.onclick=()=>{const d=el.dataset.d;openDays.has(d)?openDays.delete(d):openDays.add(d);renderKayit()});
+  if($("moreDays"))$("moreDays").onclick=()=>{showDays+=14;renderKayit()};
   $("recent").querySelectorAll(".item.tap").forEach(el=>el.addEventListener("click",e=>{if(e.target.closest(".del"))return;const t=txs.find(x=>x.id===el.dataset.id);if(t)startEdit(t)}));
   $("recent").querySelectorAll(".del").forEach(b=>b.onclick=()=>armDelete(b,async()=>{
     try{await rpc("anzi_delete",{p_kind:"tx",p_id:b.dataset.id});txs=txs.filter(t=>t.id!==b.dataset.id);prices=prices.filter(p=>p.tx_id!==b.dataset.id);if(editId===b.dataset.id)endEdit();renderAll();toast("Silindi")}catch(e){toast(errMsg(e))}
@@ -806,7 +828,7 @@ $("pad").querySelectorAll("button").forEach(b=>b.addEventListener("pointerdown",
 document.addEventListener("keydown",e=>{if($("lock").classList.contains("hidden"))return;if(e.key==="Backspace")pressKey("del");else pressKey(e.key)});
 
 /* ---------- Version / update ---------- */
-const APP_VERSION="1.5";
+const APP_VERSION="1.6";
 $("verNo").textContent=APP_VERSION;
 const vnum=v=>String(v||"0").split(".").map(Number);
 const newer=(a,b)=>{const x=vnum(a),y=vnum(b);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0}return false};
