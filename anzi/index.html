@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Anzi Maliyet / Kâr</title>
 <meta name="theme-color" content="#f5f2ee">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,6 +24,8 @@
 }
 body.ogi{--accent:#3346a8;--accent-soft:#e6e9f8}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body,button,input,select{touch-action:manipulation}
+.pad,.pad button{-webkit-user-select:none;user-select:none}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:16px}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none}
@@ -545,7 +547,7 @@ async function pressKey(k){
     $("lockErr").textContent=msg;shake($("pins"));setTimeout(()=>{pin="";drawPins()},350);
   }
 }
-$("pad").querySelectorAll("button").forEach(b=>b.onclick=()=>pressKey(b.dataset.k||b.textContent));
+$("pad").querySelectorAll("button").forEach(b=>b.addEventListener("pointerdown",e=>{e.preventDefault();pressKey(b.dataset.k||b.textContent)}));
 document.addEventListener("keydown",e=>{if($("lock").classList.contains("hidden"))return;if(e.key==="Backspace")pressKey("del");else pressKey(e.key)});
 
 /* ---------- Start ---------- */
