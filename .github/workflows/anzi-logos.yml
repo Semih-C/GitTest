@@ -1,0 +1,20 @@
+name: anzi-logos
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/anzi-logos.yml']
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: gh-pages }
+      - run: |
+          mkdir -p anzi
+          curl -fsSL -A "Mozilla/5.0" https://images.migrosone.com/yemek/logo/46755/46755-81d5ba.jpg -o anzi/logo-anzi.jpg
+          curl -fsSL -A "Mozilla/5.0" https://images.migrosone.com/yemek/logo/59479/59479-6796ba.jpg -o anzi/logo-ogi.jpg
+          file anzi/logo-*.jpg
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add anzi/logo-*.jpg && git commit -m "Anzi: sube logolari" && git push
