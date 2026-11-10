@@ -156,6 +156,11 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 .vno{font-size:12px;color:var(--muted);margin-top:8px;font-weight:600}
 .upd-bar{position:fixed;z-index:30;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:536px;margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:#fff;border-radius:14px;padding:12px 14px;font-size:14px}
 .upd-bar button{background:#fff;color:var(--ink);font-weight:800;padding:8px 14px;border-radius:10px}
+.kdvrow{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+.kseg{display:flex;gap:6px;flex:1}
+.kseg button{flex:1;padding:10px 0;border-radius:12px;background:#f1ede8;font-weight:800;font-size:15px;color:var(--muted)}
+.kseg button.on{background:var(--ink);color:#fff}
+.kdvtag{font-size:11px;font-weight:700;color:var(--muted);background:#f1ede8;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle}
 /* Prices */
 .pform .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pform .full{grid-column:1/-1}
@@ -242,6 +247,8 @@ details.prod summary::-webkit-details-marker{display:none}
         </div>
         <div class="amount"><input id="amt" inputmode="decimal" autocomplete="off" placeholder="0"><span>₺</span></div>
         <div class="chips" id="catChips"></div>
+<div class="kdvrow" id="kdvBox"><span class="label" style="margin:0">KDV</span><div class="kseg"><button data-k="1">%1</button><button data-k="10">%10</button><button data-k="20">%20</button><button data-k="0">%0</button></div></div>
+        <div class="calc" id="kdvHint" style="margin:-4px 0 12px"></div>
         <div id="prodBox" class="prodbox">
           <p class="label" style="margin:0 0 8px">Ürün alımıysa (isteğe bağlı)</p>
           <div class="pgrid">
@@ -289,6 +296,7 @@ details.prod summary::-webkit-details-marker{display:none}
             <option value="paket">/ paket</option><option value="koli">/ koli</option><option value="gr">/ gr</option>
           </select>
           <input class="field full" id="pQty" inputmode="decimal" placeholder="Miktar (toplam tutar girdiyseniz)" autocomplete="off">
+          <div class="full"><div class="kdvrow" id="pKdvBox"><span class="label" style="margin:0">KDV</span><div class="kseg"><button data-k="1">%1</button><button data-k="10">%10</button><button data-k="20">%20</button><button data-k="0">%0</button></div></div></div>
           <input type="date" class="field full" id="pDate">
         </div>
         <div class="calc" id="pHint"></div>
@@ -386,7 +394,7 @@ async function rpc(fn,args){
   if(j&&j.error==="pin"){lockOut();throw{code:"pin"}}
   return j;
 }
-const mapRow=r=>Object.assign({},r,{amount:+r.amount,price:+r.price,createdAt:Date.parse(r.created_at)||0});
+const mapRow=r=>Object.assign({},r,{amount:+r.amount,price:+r.price,kdv:r.kdv==null?null:+r.kdv,createdAt:Date.parse(r.created_at)||0});
 async function load(b){
   if(!b||!PIN)return;
   const seq=++loadSeq;
@@ -431,7 +439,7 @@ window.addEventListener("hashchange",route);
 function setType(t){
   entryType=t;entryCat=null;
   document.querySelectorAll(".seg button").forEach(el=>el.classList.toggle("on",el.dataset.type===t));
-  $("prodBox").classList.toggle("hidden",t!=="gider");
+  $("prodBox").classList.toggle("hidden",t!=="gider");$("kdvBox").classList.toggle("hidden",t!=="gider");if(typeof drawKdv==="function")drawKdv();
   const s=$("saveTx");s.className="save "+t;s.textContent=t==="gider"?"Gideri Kaydet":"Geliri Kaydet";
   renderChips();
 }
@@ -491,6 +499,17 @@ $("tProd").addEventListener("change",()=>{const u=lastUnit($("tProd").value);if(
   txHint()});
 ["tProd","tQty","amt"].forEach(id=>$(id).addEventListener("input",txHint));
 $("tUnit").addEventListener("change",txHint);
+let kdvRate=1,pKdvRate=1;
+try{const v=localStorage.getItem("anzi-kdv");if(v!==null&&!isNaN(+v))kdvRate=pKdvRate=+v}catch(e){}
+const kdvOf=(amt,k)=>k>0?amt*k/(100+k):0;
+function drawKdv(){
+  [["kdvBox",kdvRate],["pKdvBox",pKdvRate]].forEach(([id,v])=>$(id).querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.k===v)));
+  const amt=parseAmount($("amt").value);
+  $("kdvHint").innerHTML=entryType==="gider"&&amt>0?`KDV: <b>${money(kdvOf(amt,kdvRate))}</b> · KDV hariç: <b>${money(amt-kdvOf(amt,kdvRate))}</b>`:"";
+}
+$("kdvBox").querySelectorAll("button").forEach(b=>b.onclick=()=>{kdvRate=+b.dataset.k;try{localStorage.setItem("anzi-kdv",kdvRate)}catch(e){}drawKdv()});
+$("pKdvBox").querySelectorAll("button").forEach(b=>b.onclick=()=>{pKdvRate=+b.dataset.k;drawKdv()});
+$("amt").addEventListener("input",drawKdv);
 async function saveTx(){
   const amt=parseAmount($("amt").value);
   if(!(amt>0)){shake($("amt").parentElement);$("amt").focus();return}
@@ -503,15 +522,15 @@ async function saveTx(){
   const date=$("txDate").value||today();
   const btn=$("saveTx");btn.disabled=true;
   try{
-    const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:note.slice(0,200),p_date:date});
+    const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:note.slice(0,200),p_date:date,p_kdv:entryType==="gider"?kdvRate:null});
     txs.push(mapRow(r));
     if(isBuy){
-      try{const pr=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:Math.round(amt/qty*100)/100,p_unit:unit,p_date:date});prices.push(mapRow(pr))}
+      try{const pr=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:Math.round(amt/qty*100)/100,p_unit:unit,p_date:date,p_kdv:kdvRate});prices.push(mapRow(pr))}
       catch(e){toast("Gider kaydedildi ama fiyat listesine eklenemedi");}
     }
     renderAll();
     toast(isBuy?"Gider + fiyat kaydedildi ✓":(entryType==="gider"?"Gider":"Gelir")+" kaydedildi ✓");
-    $("amt").value="";$("txNote").value="";$("tProd").value="";$("tSup").value="";$("tQty").value="";$("tHint").innerHTML="";entryCat=null;renderChips();
+    $("amt").value="";$("txNote").value="";$("tProd").value="";$("tSup").value="";$("tQty").value="";$("tHint").innerHTML="";entryCat=null;renderChips();drawKdv();
   }catch(e){toast(errMsg(e))}
   btn.disabled=false;
 }
@@ -542,7 +561,7 @@ function renderKayit(){
     if(t.date!==last){last=t.date;html+=`<div class="day">${t.date===td?"Bugün":t.date===yd?"Dün":trDate(t.date)}</div>`}
     const g=t.type==="gelir";
     html+=`<div class="item"><div class="ic ${g?"gelir":"gider"}">${g?"+":"−"}</div>
-      <div class="t"><b>${esc(t.category)}</b>${t.note?`<small>${esc(t.note)}</small>`:""}</div>
+      <div class="t"><b>${esc(t.category)}${t.kdv!=null&&t.type==="gider"?`<span class="kdvtag">KDV %${t.kdv}</span>`:""}</b>${t.note?`<small>${esc(t.note)}</small>`:""}</div>
       <div class="a ${g?"gelir":"gider"}">${g?"+":"−"}${money(t.amount)}</div>
       <button class="del" data-id="${esc(t.id)}">Sil</button></div>`;
   }
@@ -631,11 +650,12 @@ function renderRapor(){
   const list=txs.filter(t=>inPeriod(t.date,period));
   const gi=sum(list,"gelir"),ge=sum(list,"gider"),n=gi-ge;
   const marj=gi>0?Math.round(n/gi*1000)/10:null;
+  const kd=list.filter(t=>t.type==="gider"&&t.kdv>0).reduce((s,t)=>s+kdvOf(+t.amount||0,t.kdv),0);
   $("netBox").innerHTML=`<div class="k">${n>=0?"Net kâr":"Net zarar"} · ${PERIODS.find(p=>p[0]===period)[1]}</div>
     <div class="v ${n>=0?"pos":"neg"}">${money(n)}</div>
     <div class="m">${marj===null?"Gelir girilmemiş":"Kâr marjı %"+String(marj).replace(".",",")} · ${list.length} kayıt</div>`;
   $("twoBox").innerHTML=`<div class="card"><p class="label">Gelir</p><div class="big pos">${money(gi)}</div></div>
-    <div class="card"><p class="label">Gider</p><div class="big neg">${money(ge)}</div></div>`;
+    <div class="card"><p class="label">Gider</p><div class="big neg">${money(ge)}</div>${kd>0?`<div class="calc" style="margin-top:4px">İçindeki KDV: <b>${money(kd)}</b><br>KDV hariç: <b>${money(ge-kd)}</b></div>`:""}</div>`;
   renderChart();
   $("giderBars").innerHTML=bars(list,"gider","var(--gider)");
   $("gelirBars").innerHTML=bars(list,"gelir","var(--gelir)");
@@ -667,8 +687,8 @@ function renderFiyat(){
       const diff=best>0?Math.round((s.price-best)/best*100):0;
       return`<div class="sup"><span class="n">${esc(s.supplier)}</span>
         ${i===0&&sups.length>1?`<span class="tag best">En ucuz</span>`:""}${i>0&&diff>0?`<span class="tag up">+%${diff}</span>`:""}
-        <span class="p">${money(s.price)}</span></div>`}).join("");
-    const hist=rows.map(r=>`<div class="hr"><span>${trDate(r.date)} · ${esc(r.supplier)}</span><b>${money(r.price)}</b><button class="del" data-id="${esc(r.id)}">Sil</button></div>`).join("");
+        <span class="p">${money(s.price)}${s.kdv!=null?`<span class="kdvtag">%${s.kdv}</span>`:""}</span></div>`}).join("");
+    const hist=rows.map(r=>`<div class="hr"><span>${trDate(r.date)} · ${esc(r.supplier)}</span><b>${money(r.price)}${r.kdv!=null?`<span class="kdvtag">%${r.kdv}</span>`:""}</b><button class="del" data-id="${esc(r.id)}">Sil</button></div>`).join("");
     return`<details class="prod" data-k="${esc(k)}"${open.has(k)?" open":""}><summary>
       <div class="ph"><b>${esc(g.name)}</b><small>/ ${esc(g.unit)} · ${sups.length} firma</small></div>${supHtml}</summary>
       <div class="hist"><p class="label" style="margin:8px 0 2px">Fiyat geçmişi</p>${hist}</div></details>`;
@@ -691,7 +711,7 @@ $("savePrice").onclick=async()=>{
   const pr=pq>0?Math.round(tot/pq*100)/100:tot;
   const btn=$("savePrice");btn.disabled=true;
   try{
-    const r=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:pr,p_unit:$("pUnit").value,p_date:$("pDate").value||today()});
+    const r=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:pr,p_unit:$("pUnit").value,p_date:$("pDate").value||today(),p_kdv:pKdvRate});
     prices.push(mapRow(r));renderAll();
     toast("Fiyat kaydedildi ✓");$("pSup").value="";$("pPrice").value="";$("pQty").value="";pHint();$("pSup").focus();
   }catch(e){toast(errMsg(e))}
@@ -732,7 +752,7 @@ $("pad").querySelectorAll("button").forEach(b=>b.addEventListener("pointerdown",
 document.addEventListener("keydown",e=>{if($("lock").classList.contains("hidden"))return;if(e.key==="Backspace")pressKey("del");else pressKey(e.key)});
 
 /* ---------- Version / update ---------- */
-const APP_VERSION="1.1";
+const APP_VERSION="1.2";
 $("verNo").textContent=APP_VERSION;
 const vnum=v=>String(v||"0").split(".").map(Number);
 const newer=(a,b)=>{const x=vnum(a),y=vnum(b);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0}return false};
