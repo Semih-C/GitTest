@@ -165,6 +165,8 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 .editbar button{background:#fff;border-radius:9px;padding:6px 12px;font-weight:800;color:var(--ink)}
 .item.tap{cursor:pointer}
 .item.editing{background:#fff6dc;border-radius:10px}
+.exv{display:block;font-size:12px;font-weight:600;color:var(--muted);text-align:right;margin-top:1px}
+.sup{align-items:flex-start}.sup .p{text-align:right}
 /* Prices */
 .pform .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pform .full{grid-column:1/-1}
@@ -494,7 +496,7 @@ function lastSupplier(prod){const k=norm(prod);const r=prices.filter(p=>norm(p.p
 function txHint(){
   const prod=clean($("tProd").value),qty=parseAmount($("tQty").value),amt=parseAmount($("amt").value),unit=$("tUnit").value;
   let t="";
-  if(amt>0&&qty>0)t+=`Birim fiyat: <b>${money(amt/qty)} / ${esc(unit)}</b> → fiyat listesine eklenecek`;
+  if(amt>0&&qty>0){const u=amt/qty;t+=`Birim fiyat: <b>${money(u)} / ${esc(unit)}</b>`+(kdvRate>0?` (KDV hariç <b>${money(u-kdvOf(u,kdvRate))}</b>)`:"")+` → fiyat listesine eklenecek`}
   const info=priceInfo(prod,unit);if(info)t+=(t?"<br>":"")+info;
   if(t&&amt>0&&qty>0){const k=norm(prod);const prev=prices.filter(p=>norm(p.product)===k&&p.unit===unit).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||b.createdAt-a.createdAt)[0];
     if(prev){const d=Math.round((amt/qty-prev.price)/prev.price*100);if(d)t+=`<br>Önceki alıma göre <b class="${d>0?"neg":"pos"}">${d>0?"+":""}%${d}</b>`}}
@@ -525,12 +527,13 @@ function endEdit(){
 $("editCancel").onclick=endEdit;
 try{const v=localStorage.getItem("anzi-kdv");if(v!==null&&!isNaN(+v))kdvRate=pKdvRate=+v}catch(e){}
 const kdvOf=(amt,k)=>k>0?amt*k/(100+k):0;
+const exVat=p=>p.kdv>0?`<small class="exv">KDV hariç ${money(p.price-kdvOf(p.price,p.kdv))}</small>`:"";
 function drawKdv(){
   [["kdvBox",kdvRate],["pKdvBox",pKdvRate]].forEach(([id,v])=>$(id).querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.k===v)));
   const amt=parseAmount($("amt").value);
   $("kdvHint").innerHTML=entryType==="gider"&&amt>0?`KDV: <b>${money(kdvOf(amt,kdvRate))}</b> · KDV hariç: <b>${money(amt-kdvOf(amt,kdvRate))}</b>`:"";
 }
-$("kdvBox").querySelectorAll("button").forEach(b=>b.onclick=()=>{kdvRate=+b.dataset.k;try{localStorage.setItem("anzi-kdv",kdvRate)}catch(e){}drawKdv()});
+$("kdvBox").querySelectorAll("button").forEach(b=>b.onclick=()=>{kdvRate=+b.dataset.k;try{localStorage.setItem("anzi-kdv",kdvRate)}catch(e){}drawKdv();txHint()});
 $("pKdvBox").querySelectorAll("button").forEach(b=>b.onclick=()=>{pKdvRate=+b.dataset.k;drawKdv()});
 $("amt").addEventListener("input",drawKdv);
 async function saveTx(){
@@ -543,7 +546,7 @@ async function saveTx(){
     try{
       const r=await rpc("anzi_update_tx",{p_id:editId,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:$("txNote").value.trim().slice(0,200),p_date:$("txDate").value||today(),p_kdv:entryType==="gider"?kdvRate:null});
       if(r&&r.error){toast("Kayıt bulunamadı, silinmiş olabilir");}
-      else{const i=txs.findIndex(x=>x.id===editId);if(i>=0)txs[i]=mapRow(r);toast("Kayıt güncellendi ✓");endEdit()}
+      else{const i=txs.findIndex(x=>x.id===editId);if(i>=0)txs[i]=mapRow(r);toast("Kayıt güncellendi ✓");endEdit();load(cur)}
     }catch(e){toast(errMsg(e))}
     btn.disabled=false;return;
   }
@@ -557,7 +560,7 @@ async function saveTx(){
     const r=await rpc("anzi_add_tx",{p_branch:cur,p_type:entryType,p_amount:amt,p_category:entryCat,p_note:note.slice(0,200),p_date:date,p_kdv:entryType==="gider"?kdvRate:null});
     txs.push(mapRow(r));
     if(isBuy){
-      try{const pr=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:Math.round(amt/qty*100)/100,p_unit:unit,p_date:date,p_kdv:kdvRate});prices.push(mapRow(pr))}
+      try{const pr=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:Math.round(amt/qty*100)/100,p_unit:unit,p_date:date,p_kdv:kdvRate,p_qty:qty,p_tx_id:r.id});prices.push(mapRow(pr))}
       catch(e){toast("Gider kaydedildi ama fiyat listesine eklenemedi");}
     }
     renderAll();
@@ -600,7 +603,7 @@ function renderKayit(){
   $("recent").innerHTML=html;
   $("recent").querySelectorAll(".item.tap").forEach(el=>el.addEventListener("click",e=>{if(e.target.closest(".del"))return;const t=txs.find(x=>x.id===el.dataset.id);if(t)startEdit(t)}));
   $("recent").querySelectorAll(".del").forEach(b=>b.onclick=()=>armDelete(b,async()=>{
-    try{await rpc("anzi_delete",{p_kind:"tx",p_id:b.dataset.id});txs=txs.filter(t=>t.id!==b.dataset.id);if(editId===b.dataset.id)endEdit();renderAll();toast("Silindi")}catch(e){toast(errMsg(e))}
+    try{await rpc("anzi_delete",{p_kind:"tx",p_id:b.dataset.id});txs=txs.filter(t=>t.id!==b.dataset.id);prices=prices.filter(p=>p.tx_id!==b.dataset.id);if(editId===b.dataset.id)endEdit();renderAll();toast("Silindi")}catch(e){toast(errMsg(e))}
   }));
 }
 
@@ -720,8 +723,8 @@ function renderFiyat(){
       const diff=best>0?Math.round((s.price-best)/best*100):0;
       return`<div class="sup"><span class="n">${esc(s.supplier)}</span>
         ${i===0&&sups.length>1?`<span class="tag best">En ucuz</span>`:""}${i>0&&diff>0?`<span class="tag up">+%${diff}</span>`:""}
-        <span class="p">${money(s.price)}${s.kdv!=null?`<span class="kdvtag">%${s.kdv}</span>`:""}</span></div>`}).join("");
-    const hist=rows.map(r=>`<div class="hr"><span>${trDate(r.date)} · ${esc(r.supplier)}</span><b>${money(r.price)}${r.kdv!=null?`<span class="kdvtag">%${r.kdv}</span>`:""}</b><button class="del" data-id="${esc(r.id)}">Sil</button></div>`).join("");
+        <span class="p">${money(s.price)}${s.kdv!=null?`<span class="kdvtag">%${s.kdv}</span>`:""}${exVat(s)}</span></div>`}).join("");
+    const hist=rows.map(r=>`<div class="hr"><span>${trDate(r.date)} · ${esc(r.supplier)}</span><b>${money(r.price)}${r.kdv!=null?`<span class="kdvtag">%${r.kdv}</span>`:""}${exVat(r)}</b><button class="del" data-id="${esc(r.id)}">Sil</button></div>`).join("");
     return`<details class="prod" data-k="${esc(k)}"${open.has(k)?" open":""}><summary>
       <div class="ph"><b>${esc(g.name)}</b><small>/ ${esc(g.unit)} · ${sups.length} firma</small></div>${supHtml}</summary>
       <div class="hist"><p class="label" style="margin:8px 0 2px">Fiyat geçmişi</p>${hist}</div></details>`;
@@ -744,7 +747,7 @@ $("savePrice").onclick=async()=>{
   const pr=pq>0?Math.round(tot/pq*100)/100:tot;
   const btn=$("savePrice");btn.disabled=true;
   try{
-    const r=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:pr,p_unit:$("pUnit").value,p_date:$("pDate").value||today(),p_kdv:pKdvRate});
+    const r=await rpc("anzi_add_price",{p_branch:cur,p_product:prod,p_supplier:sup,p_price:pr,p_unit:$("pUnit").value,p_date:$("pDate").value||today(),p_kdv:pKdvRate,p_qty:pq>0?pq:null});
     prices.push(mapRow(r));renderAll();
     toast("Fiyat kaydedildi ✓");$("pSup").value="";$("pPrice").value="";$("pQty").value="";pHint();$("pSup").focus();
   }catch(e){toast(errMsg(e))}
@@ -785,7 +788,7 @@ $("pad").querySelectorAll("button").forEach(b=>b.addEventListener("pointerdown",
 document.addEventListener("keydown",e=>{if($("lock").classList.contains("hidden"))return;if(e.key==="Backspace")pressKey("del");else pressKey(e.key)});
 
 /* ---------- Version / update ---------- */
-const APP_VERSION="1.3";
+const APP_VERSION="1.4";
 $("verNo").textContent=APP_VERSION;
 const vnum=v=>String(v||"0").split(".").map(Number);
 const newer=(a,b)=>{const x=vnum(a),y=vnum(b);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0}return false};
