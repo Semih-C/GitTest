@@ -132,6 +132,7 @@ table.mt td{text-align:right;padding:9px 4px;border-top:1px solid var(--line);fo
 .legend i{width:10px;height:10px;border-radius:3px;display:block}
 .ch-tip{font-size:13px;font-weight:600;color:var(--muted);min-height:20px;margin:4px 0 6px}
 .ch-tip b{color:var(--ink)}
+#chart{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
 #chart svg{display:block;width:100%;height:auto;overflow:visible}
 #chart .col{cursor:pointer}
 #chart .col.on .hit{fill:rgba(0,0,0,.05)}
@@ -494,25 +495,31 @@ function renderChart(){
   const {list,title}=buckets(period);
   $("chTitle").textContent="Gelir / Gider · "+title;
   const data=list.map(b=>{const l=txs.filter(t=>t.date&&b.test(t.date));return Object.assign({},b,{gi:sum(l,"gelir"),ge:sum(l,"gider")})});
-  const W=Math.max(280,$("chart").clientWidth||320),H=180,L=40,R=4,T=8,B=22;
+  const box=$("chart").clientWidth||320,W=Math.max(280,box,44+26*data.length),H=220,L=40,R=4,T=40,B=22;
   const raw=Math.max(1,...data.map(d=>Math.max(d.gi,d.ge)))/3,mag=Math.pow(10,Math.floor(Math.log10(raw)));
   const stepV=[1,1.5,2,2.5,3,4,5,6,8,10].map(m=>m*mag).find(v=>v>=raw),max=stepV*3;
   const pw=W-L-R,ph=H-T-B,cw=pw/data.length,bw=Math.max(1.5,Math.min(14,(cw*0.8-1)/2));
   const y=v=>T+ph-v/max*ph;
+  const short=v=>compact.format(v).replace(/\s/g,"");
+  const vlab=(x,v)=>{if(v<=0)return"";const top=y(v),cx=x+bw/2;
+    return bw>=22?`<text x="${cx}" y="${top-4}" text-anchor="middle" font-size="10" font-weight="700" fill="#4a4540">${short(v)}</text>`
+      :`<text transform="translate(${cx+3} ${top-4}) rotate(-90)" font-size="9" font-weight="700" fill="#4a4540">${short(v)}</text>`};
   const bar=(x,v,c)=>{if(v<=0)return"";const top=y(v),hgt=T+ph-top,r=Math.min(4,bw/2,hgt);
     return`<path d="M${x},${T+ph}V${top+r}Q${x},${top} ${x+r},${top}H${x+bw-r}Q${x+bw},${top} ${x+bw},${top+r}V${T+ph}Z" fill="${c}"/>`};
   let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gelir ve gider grafiği">`;
   for(let i=0;i<=3;i++){const v=max*i/3,yy=y(v);
     s+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="${i?"#eee9e3":"#d9d2ca"}" stroke-width="1"/>`;
     s+=`<text x="${L-6}" y="${yy+4}" text-anchor="end" font-size="10" fill="#7a736c">${i?compact.format(v):"0"}</text>`}
-  const step=Math.ceil(data.length/8);
+  const step=Math.max(1,Math.ceil(data.length/Math.floor(W/40)));
   data.forEach((d,i)=>{const cx=L+cw*i,mid=cx+cw/2;
     s+=`<g class="col${chSel===d.key?" on":""}" data-i="${i}"><rect class="hit" x="${cx}" y="${T}" width="${cw}" height="${ph+B}" fill="transparent"/>`;
-    s+=bar(mid-bw-1,d.gi,"var(--gelir)")+bar(mid+1,d.ge,"var(--gider)");
+    s+=bar(mid-bw-1,d.gi,"var(--gelir)")+bar(mid+1,d.ge,"var(--gider)");s+=vlab(mid-bw-1,d.gi)+vlab(mid+1,d.ge);
     if(i%step===0||data.length<=8)s+=`<text x="${mid}" y="${H-6}" text-anchor="middle" font-size="10" fill="#7a736c">${esc(d.label)}</text>`;
     s+=`</g>`});
   s+=`</svg>`;
   $("chart").innerHTML=s;
+  const svgEl=$("chart").querySelector("svg");if(W>box){svgEl.style.width=W+"px";svgEl.style.maxWidth="none";
+    const ti=data.findIndex(d=>d.test&&d.test(today()));const pos=ti>=0?L+cw*ti-box/2:W;$("chart").scrollLeft=Math.max(0,pos)}
   const show=d=>{const n=d.gi-d.ge;$("chTip").innerHTML=`<b>${esc(d.full)}</b> · Gelir <b class="pos">${money(d.gi)}</b> · Gider <b class="neg">${money(d.ge)}</b> · Net <b class="${n>=0?"pos":"neg"}">${money(n)}</b>`};
   const cur=data.find(d=>d.key===chSel);
   if(cur)show(cur);else $("chTip").textContent=data.some(d=>d.gi||d.ge)?"Detay için bir sütuna dokunun":"Bu dönemde kayıt yok";
