@@ -1,0 +1,24 @@
+total 624
+drwxr-xr-x 2 runner runner   4096 Nov 10 07:34 .
+drwxr-xr-x 3 runner runner   4096 Nov 10 07:33 ..
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 log.txt
+-rw-r--r-- 1 runner runner 130296 Nov 10 07:33 ty-anzi%20sushi.html
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-anzi%20sushi.html.json.txt
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-anzi%20sushi.html.links.txt
+-rw-r--r-- 1 runner runner     38 Nov 10 07:34 ty-anzi%20sushi.html.names.txt
+-rw-r--r-- 1 runner runner 130278 Nov 10 07:33 ty-anzi.html
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-anzi.html.json.txt
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-anzi.html.links.txt
+-rw-r--r-- 1 runner runner     14 Nov 10 07:34 ty-anzi.html.names.txt
+-rw-r--r-- 1 runner runner  86564 Nov 10 07:34 ty-home.html
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-home.html.json.txt
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-home.html.links.txt
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-home.html.names.txt
+-rw-r--r-- 1 runner runner 130308 Nov 10 07:34 ty-ogi%20moji%20sushi.html
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-ogi%20moji%20sushi.html.json.txt
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-ogi%20moji%20sushi.html.links.txt
+-rw-r--r-- 1 runner runner     34 Nov 10 07:34 ty-ogi%20moji%20sushi.html.names.txt
+-rw-r--r-- 1 runner runner 130290 Nov 10 07:34 ty-ogi%20moji.html
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-ogi%20moji.html.json.txt
+-rw-r--r-- 1 runner runner      0 Nov 10 07:34 ty-ogi%20moji.html.links.txt
+-rw-r--r-- 1 runner runner     22 Nov 10 07:34 ty-ogi%20moji.html.names.txt
