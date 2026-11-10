@@ -5,6 +5,14 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Anzi Maliyet / Kâr</title>
+<meta name="theme-color" content="#f5f2ee">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Anzi Kasa">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" type="image/png" href="icon-64.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -24,6 +32,7 @@ button{cursor:pointer;border:0;background:none}
 
 /* Home */
 #home{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:calc(24px + env(safe-area-inset-top)) 0 calc(24px + env(safe-area-inset-bottom))}
+.home-logo{display:block;width:84px;height:84px;border-radius:22px;margin:0 auto 16px;box-shadow:0 10px 24px rgba(184,50,31,.25)}
 .home-title{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;text-align:center;margin:0 0 6px}
 .home-sub{text-align:center;font-size:26px;font-weight:800;margin:0 0 28px}
 .branch-btn{display:flex;align-items:center;gap:16px;width:100%;background:var(--card);border-radius:22px;padding:22px 20px;margin-bottom:14px;box-shadow:0 1px 0 var(--line),0 8px 24px rgba(40,25,10,.06);text-align:left;transition:transform .12s}
@@ -159,6 +168,7 @@ details.prod summary::-webkit-details-marker{display:none}
 <!-- HOME -->
 <section id="home">
   <div class="wrap">
+    <img class="home-logo" src="icon-192.png" alt="" width="84" height="84">
     <p class="home-title">Gelir · Gider · Kâr</p>
     <h2 class="home-sub">Hangi şube?</h2>
     <button class="branch-btn" data-go="anzi">
