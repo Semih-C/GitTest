@@ -116,7 +116,7 @@ footer{font-size:12px;color:var(--mute);text-align:center;margin-top:24px;line-h
 
   <section class="view" id="v-ara">
     <div class="chips" id="mchips"></div>
-    <div id="sres"><div class="empty"><b>Ne arıyorsun?</b>Bir ürün yaz; A101, BİM, ŞOK, Migros, Hakmar, Macrocenter, Metro Pendik, Bizim Toptan ve Anpa kataloğu fiyatlarını yan yana göreyim.</div></div>
+    <div id="sres"><div class="empty"><b>Ne arıyorsun?</b>Bir ürün yaz; A101, BİM, ŞOK, Migros, Hakmar, Macrocenter, Metro Pendik, Bizim Toptan, Çağrı ve Anpa kataloğu fiyatlarını yan yana göreyim.</div></div>
   </section>
 
   <section class="view" id="v-liste">
@@ -134,8 +134,9 @@ footer{font-size:12px;color:var(--mute);text-align:center;margin-top:24px;line-h
   </section>
 
   <section class="view" id="v-katalog">
+    <div class="card"><b>Anpa Gross kataloğu otomatik</b><p class="note" style="margin:4px 0 0">Anpa Gross'un sitesi her gün kontrol ediliyor; yeni katalog çıkınca ürünleri ve fiyatları buraya ekleniyor ve aramada “Katalog” etiketiyle görünüyor.</p></div>
     <div id="kai"></div>
-    <div class="card">
+    <div class="card" id="kup" hidden>
       <b>Katalog sayfası oku</b>
       <p class="note" style="margin:4px 0 0">Katalog/broşür sayfasının ekran görüntüsünü ya da fotoğrafını yükle; yapay zekâ ürün ve fiyatları listeye çevirir, kontrol edip kaydedersin. Kaydedilenler aramada herkese görünür.</p>
       <label class="f" for="kmarket">Market</label>
@@ -159,7 +160,7 @@ footer{font-size:12px;color:var(--mute);text-align:center;margin-top:24px;line-h
 
 <script>
 {
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const BUILD_DATE = "15.11.2026";
 const API = "https://wnkhvnzwxjbrhxooipii.supabase.co/functions/v1/mf-api";
 const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indua2h2bnp3eGpicmh4b29pcGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyODc4MjEsImV4cCI6MjEwOTg2MzgyMX0.vLg-nOdQTb6bLBQ7LxB7wl8QU1RpYc45Br5CHqJpe70";
@@ -167,7 +168,7 @@ const H = { Authorization: "Bearer " + KEY, apikey: KEY };
 const M = {
   a101:{n:"A101",c:"#00a0e3"}, bim:{n:"BİM",c:"#d6001c"}, sok:{n:"ŞOK",c:"#e6a800"}, migros:{n:"Migros",c:"#f26f21"},
   hakmar:{n:"Hakmar",c:"#c8102e"}, macrocenter:{n:"Macrocenter",c:"#222"}, metro:{n:"Metro",c:"#003d7c"},
-  bizimtoptan:{n:"Bizim Toptan",c:"#7a1fa2"}, anpa:{n:"Anpa Gross",c:"#e4002b"}, carrefour:{n:"CarrefourSA",c:"#1e5bc6"}, tarim_kredi:{n:"Tarım Kredi",c:"#2e7d32"}
+  bizimtoptan:{n:"Bizim Toptan",c:"#7a1fa2"}, cagri:{n:"Çağrı",c:"#0a8f3c"}, anpa:{n:"Anpa Gross",c:"#e4002b"}, carrefour:{n:"CarrefourSA",c:"#1e5bc6"}, tarim_kredi:{n:"Tarım Kredi",c:"#2e7d32"}
 };
 const DEF_OFF = ["carrefour","tarim_kredi"];
 const $ = (s) => document.querySelector(s);
@@ -185,7 +186,7 @@ const on = (it) => !off.includes(it.market);
 
 /* ---------- version & refresh ---------- */
 $("#ver").textContent = `Sürüm ${APP_VERSION} · ${BUILD_DATE}`;
-$("#foot").innerHTML = `Market Fiyat ${APP_VERSION} (${BUILD_DATE}) · Fiyatlar marketlerin kendi sitelerinden ve Market Fiyatı (TÜBİTAK) verisinden anlık çekilir; mağazada farklı olabilir. Metro fiyatları Pendik şubesi, KDV tahmini eklenmiş.`;
+$("#foot").innerHTML = `Market Fiyat ${APP_VERSION} (${BUILD_DATE}) · Fiyatlar marketlerin kendi sitelerinden ve Market Fiyatı (TÜBİTAK) verisinden anlık çekilir; mağazada farklı olabilir. Metro fiyatları Pendik şubesi, KDV tahmini eklenmiş. Anpa Gross fiyatları güncel katalogdan.`;
 async function checkUpdate(manual) {
   try {
     const v = await fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json());
@@ -338,7 +339,7 @@ $("#kmarket").innerHTML = Object.entries(M).filter(([k]) => !["metro","macrocent
 async function loadKatalog() {
   try {
     const a = await fetch(`${API}?action=ai-status`, { headers: H }).then((r) => r.json());
-    $("#kai").innerHTML = a.ready ? "" : `<div class="banner"><span>Yapay zekâ okuma için anahtar henüz eklenmedi. Uygulamanın sahibi Supabase'e <b>GEMINI_API_KEY</b> ekleyince bu bölüm çalışır.</span></div>`;
+    $("#kup").hidden = !a.ready;
     const s = await fetch(`${API}?action=catalog-status`, { headers: H }).then((r) => r.json());
     $("#kstat").innerHTML = Array.isArray(s) && s.length ? `<div class="card"><b>Kayıtlı kataloglar</b>${s.map((c) => `<div class="alt-r"><span>${esc(mk(c.market).n)} · ${c.pages.length} sayfa · ${c.items} ürün</span><b>${c.valid_to ? esc(c.valid_to.split("-").reverse().join(".")) + "'e kadar" : ""}</b></div>`).join("")}</div>` : "";
   } catch {}
