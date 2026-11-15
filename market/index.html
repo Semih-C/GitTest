@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Market Fiyat</title>
+<meta name="theme-color" content="#ffd23f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Market Fiyat">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: practical, warm, family kitchen-table tool.
+   IDEA: a supermarket shelf price tag — yellow label, black numerals.
+   PICTURE: the live result list itself; the cheapest price set big on a yellow tag.
+   COLOUR and TYPE: tag yellow #ffd23f + ink #16130f on paper white; Rubik.
+   LAYOUT: sticky header with search, tabs at bottom (thumb reach), one column. */
+:root{color-scheme:light dark;--bg:light-dark(#f6f4ef,#141311);--card:light-dark(#fff,#1f1d1a);--ink:light-dark(#16130f,#f3efe6);--mute:light-dark(#6b655b,#a39d92);--line:light-dark(#e6e1d6,#34312c);--tag:#ffd23f;--tagink:#16130f;--good:light-dark(#0b7a3b,#5fd08f);--warn:light-dark(#b42318,#ff8a7a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Rubik,system-ui,sans-serif;overflow-x:clip}
+button,input,select{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--tag);color:var(--tagink);padding:calc(env(safe-area-inset-top) + 10px) 16px 12px}
+.top{display:flex;align-items:center;gap:10px;max-width:760px;margin:0 auto}
+.top h1{font-size:22px;font-weight:800;margin:0;flex:1;letter-spacing:-.01em}
+.top h1 small{font-weight:500;font-size:12px;opacity:.75;display:block;letter-spacing:0}
+.ib{width:44px;height:44px;border-radius:12px;border:2px solid var(--tagink);background:transparent;display:grid;place-items:center;cursor:pointer}
+.ib svg{width:22px;height:22px}.ib.spin svg{animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ib.spin svg{animation:none}}
+.sbar{display:flex;gap:8px;max-width:760px;margin:10px auto 0}
+.sbar input{flex:1;height:48px;border-radius:12px;border:2px solid var(--tagink);padding:0 14px;font-size:16px;background:#fff;color:#16130f}
+.btn{height:48px;padding:0 18px;border-radius:12px;border:0;background:var(--tagink);color:#fff;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn.alt{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn.sm{height:38px;padding:0 12px;font-size:14px}
+.btn:disabled{opacity:.5}
+main{max-width:760px;margin:0 auto;padding:14px 16px calc(96px + env(safe-area-inset-bottom))}
+.view{display:none}.view.on{display:block}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.chip{height:34px;padding:0 11px;border-radius:99px;border:1.5px solid var(--line);background:var(--card);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.chip.off{opacity:.45;text-decoration:line-through}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px}
+.res{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center}
+.res img,.ph{width:56px;height:56px;border-radius:10px;object-fit:contain;background:#fff;border:1px solid var(--line)}
+.nm{font-weight:500;line-height:1.25}
+.meta{font-size:13px;color:var(--mute);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.mk{font-weight:700;font-size:12px;padding:2px 7px;border-radius:6px;color:#fff;white-space:nowrap}
+.promo{font-size:12px;font-weight:700;color:var(--warn)}
+.pr{text-align:right;white-space:nowrap}
+.pr b{display:block;font-size:20px;font-weight:800}
+.pr s{font-size:12px;color:var(--mute)}
+.best{background:var(--tag);color:var(--tagink);border-color:var(--tag)}
+.best .meta,.best s{color:#4a4436}
+.add{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line);background:transparent;cursor:pointer;font-size:20px;line-height:1;margin-top:6px}
+.best .add{border-color:var(--tagink)}
+.empty{text-align:center;color:var(--mute);padding:40px 12px}
+.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+.note{font-size:13px;color:var(--mute);margin:6px 0 12px}
+.err{font-size:13px;color:var(--warn);margin:4px 0 10px}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+nav a{flex:1;max-width:190px;text-align:center;padding:10px 4px 12px;color:var(--mute);text-decoration:none;font-size:13px;font-weight:500;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
+nav a svg{width:24px;height:24px}
+nav a.on{color:var(--ink)}nav a.on::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--tag)}
+nav .badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--warn);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;font-weight:700}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center}
+.qty{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.qty button{width:34px;height:36px;border:0;background:transparent;cursor:pointer;font-size:18px}
+.qty span{width:26px;text-align:center;font-weight:700}
+.del{border:0;background:transparent;color:var(--mute);cursor:pointer;width:36px;height:36px;font-size:18px}
+.sum{background:var(--tagink);color:#fff;border-radius:16px;padding:16px;margin:4px 0 12px}
+.sum .big{font-size:clamp(30px,8vw,42px);font-weight:800;line-height:1.05;color:var(--tag)}
+.sum table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+.sum td{padding:6px 0;border-top:1px solid #ffffff22}.sum td:last-child{text-align:right;white-space:nowrap;font-weight:700}
+.sum .dim{opacity:.6;font-weight:400}
+details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:6px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+.alt-r{display:flex;justify-content:space-between;gap:8px;font-size:14px;padding:6px 0;border-top:1px dashed var(--line)}
+.alt-r b{white-space:nowrap}
+.banner{background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:14px}
+.banner .btn{height:36px;background:var(--tag);color:var(--tagink)}
+label.f{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+.in{width:100%;height:46px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);padding:0 12px;font-size:16px}
+table.ed{width:100%;border-collapse:collapse;font-size:14px}
+table.ed td{padding:4px 2px;border-top:1px solid var(--line)}
+table.ed input{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;padding:0 8px;background:var(--bg);font-size:15px}
+table.ed td.p{width:96px}
+footer{font-size:12px;color:var(--mute);text-align:center;margin-top:24px;line-height:1.6}
+:focus-visible{outline:3px solid #2f6fed;outline-offset:2px}
+.sk{height:80px;border-radius:16px;background:linear-gradient(90deg,var(--card),var(--line),var(--card));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:10px}
+@keyframes sh{to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>Market Fiyat<small id="ver">Sürüm …</small></h1>
+    <button class="ib" id="refresh" aria-label="Fiyatları ve uygulamayı yenile" title="Yenile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+    </button>
+  </div>
+  <form class="sbar" id="sform" autocomplete="off">
+    <input id="q" type="search" placeholder="Ürün yaz: avokado, Pınar süt 1 L…" enterkeyhint="search" aria-label="Ürün ara">
+    <button class="btn" type="submit">Ara</button>
+  </form>
+</header>
+
+<main>
+  <div id="upd"></div>
+
+  <section class="view" id="v-ara">
+    <div class="chips" id="mchips"></div>
+    <div id="sres"><div class="empty"><b>Ne arıyorsun?</b>Bir ürün yaz; A101, BİM, ŞOK, Migros, Hakmar, Macrocenter, Metro Pendik, Bizim Toptan ve Anpa kataloğu fiyatlarını yan yana göreyim.</div></div>
+  </section>
+
+  <section class="view" id="v-liste">
+    <form class="row" id="lform" style="margin-bottom:12px">
+      <input class="in" id="li" placeholder="Listeye ekle: yumurta 30'lu, Çaykur Tiryaki 1 kg…" style="flex:1" aria-label="Listeye ürün ekle">
+      <button class="btn" type="submit">Ekle</button>
+    </form>
+    <div id="lsum"></div>
+    <div id="litems"></div>
+    <div class="row" style="justify-content:space-between;margin-top:6px">
+      <button class="btn" id="lprice">Fiyatları getir</button>
+      <button class="btn alt sm" id="notif">Bildirimleri aç</button>
+    </div>
+    <p class="note" id="lnote">İpucu: marka ve gramaj yazarsan (ör. "Sek süt 1 L") eşleşme daha doğru olur.</p>
+  </section>
+
+  <section class="view" id="v-katalog">
+    <div id="kai"></div>
+    <div class="card">
+      <b>Katalog sayfası oku</b>
+      <p class="note" style="margin:4px 0 0">Katalog/broşür sayfasının ekran görüntüsünü ya da fotoğrafını yükle; yapay zekâ ürün ve fiyatları listeye çevirir, kontrol edip kaydedersin. Kaydedilenler aramada herkese görünür.</p>
+      <label class="f" for="kmarket">Market</label>
+      <select class="in" id="kmarket"></select>
+      <label class="f" for="kfile">Sayfa görselleri</label>
+      <input class="in" id="kfile" type="file" accept="image/*" multiple style="padding-top:10px">
+      <p class="note"><a href="https://www.anpagross.com/tr-TR/kataloglar/193/0" target="_blank" rel="noopener">Anpa Gross güncel kataloglarını aç</a></p>
+    </div>
+    <div id="kout"></div>
+    <div id="kstat"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<nav>
+  <a href="#ara" data-v="ara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Ara</a>
+  <a href="#liste" data-v="liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6"/><circle cx="9" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>Listem<span class="badge" id="lbadge" hidden></span></a>
+  <a href="#katalog" data-v="katalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h7v16H4zM13 4h7v16h-7z"/></svg>Katalog</a>
+</nav>
+
+<script>
+{
+const APP_VERSION = "1.0.0";
+const BUILD_DATE = "15.11.2026";
+const API = "https://wnkhvnzwxjbrhxooipii.supabase.co/functions/v1/mf-api";
+const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indua2h2bnp3eGpicmh4b29pcGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyODc4MjEsImV4cCI6MjEwOTg2MzgyMX0.vLg-nOdQTb6bLBQ7LxB7wl8QU1RpYc45Br5CHqJpe70";
+const H = { Authorization: "Bearer " + KEY, apikey: KEY };
+const M = {
+  a101:{n:"A101",c:"#00a0e3"}, bim:{n:"BİM",c:"#d6001c"}, sok:{n:"ŞOK",c:"#e6a800"}, migros:{n:"Migros",c:"#f26f21"},
+  hakmar:{n:"Hakmar",c:"#c8102e"}, macrocenter:{n:"Macrocenter",c:"#222"}, metro:{n:"Metro",c:"#003d7c"},
+  bizimtoptan:{n:"Bizim Toptan",c:"#7a1fa2"}, anpa:{n:"Anpa Gross",c:"#e4002b"}, carrefour:{n:"CarrefourSA",c:"#1e5bc6"}, tarim_kredi:{n:"Tarım Kredi",c:"#2e7d32"}
+};
+const DEF_OFF = ["carrefour","tarim_kredi"];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const tl = (n) => Number(n).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("mf_" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("mf_" + k, JSON.stringify(v)); } catch {} }
+};
+let off = store.get("off", DEF_OFF);
+let list = store.get("list", []);
+let lastQ = "";
+const mk = (m) => M[m] || { n: m, c: "#555" };
+const on = (it) => !off.includes(it.market);
+
+/* ---------- version & refresh ---------- */
+$("#ver").textContent = `Sürüm ${APP_VERSION} · ${BUILD_DATE}`;
+$("#foot").innerHTML = `Market Fiyat ${APP_VERSION} (${BUILD_DATE}) · Fiyatlar marketlerin kendi sitelerinden ve Market Fiyatı (TÜBİTAK) verisinden anlık çekilir; mağazada farklı olabilir. Metro fiyatları Pendik şubesi, KDV tahmini eklenmiş.`;
+async function checkUpdate(manual) {
+  try {
+    const v = await fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then((r) => r.json());
+    if (v.version && v.version !== APP_VERSION) {
+      $("#upd").innerHTML = `<div class="banner"><span>Yeni sürüm hazır: <b>${esc(v.version)}</b>${v.notes ? " · " + esc(v.notes) : ""}</span><button class="btn sm" id="doupd">Güncelle</button></div>`;
+      $("#doupd").onclick = () => location.replace(location.pathname + "?v=" + encodeURIComponent(v.version) + location.hash);
+      if (manual) location.replace(location.pathname + "?v=" + encodeURIComponent(v.version) + location.hash);
+    }
+  } catch {}
+}
+$("#refresh").onclick = async () => {
+  const b = $("#refresh"); b.classList.add("spin");
+  await checkUpdate(true);
+  const v = current();
+  if (v === "ara" && lastQ) await runSearch(lastQ);
+  if (v === "liste") await priceList();
+  if (v === "katalog") await loadKatalog();
+  b.classList.remove("spin");
+};
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(false); });
+
+/* ---------- api ---------- */
+const cache = new Map();
+async function search(q, fresh) {
+  const k = q.toLocaleLowerCase("tr-TR").trim();
+  if (!fresh && cache.has(k) && Date.now() - cache.get(k).t < 10 * 60e3) return cache.get(k).d;
+  const r = await fetch(`${API}?action=search&q=${encodeURIComponent(q)}`, { headers: H });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || r.status);
+  cache.set(k, { t: Date.now(), d });
+  return d;
+}
+
+/* ---------- routing ---------- */
+const current = () => (["ara","liste","katalog"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "ara");
+function route() {
+  const v = current();
+  document.querySelectorAll(".view").forEach((s) => s.classList.toggle("on", s.id === "v-" + v));
+  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.v === v));
+  $("#sform").style.display = v === "ara" ? "" : "none";
+  if (v === "liste") renderList();
+  if (v === "katalog") loadKatalog();
+}
+addEventListener("hashchange", route);
+
+/* ---------- search view ---------- */
+function chips() {
+  $("#mchips").innerHTML = Object.entries(M).map(([k, v]) => `<button class="chip ${off.includes(k) ? "off" : ""}" data-m="${k}" aria-pressed="${!off.includes(k)}"><i style="background:${v.c}"></i>${v.n}</button>`).join("");
+  $("#mchips").querySelectorAll(".chip").forEach((b) => b.onclick = () => {
+    const m = b.dataset.m; off = off.includes(m) ? off.filter((x) => x !== m) : [...off, m]; store.set("off", off); chips();
+    if (lastQ) runSearch(lastQ);
+  });
+}
+function card(it, best) {
+  const m = mk(it.market);
+  const img = it.image ? `<img src="${esc(it.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">` : `<div class="ph"></div>`;
+  return `<div class="card res ${best ? "best" : ""}">${img}
+    <div><div class="nm">${esc(it.name)}</div>
+      <div class="meta"><span class="mk" style="background:${m.c}">${esc(m.n)}</span>${it.unit ? `<span>${esc(it.unit)}</span>` : ""}${it.branch ? `<span>${esc(it.branch)}</span>` : ""}${best ? "<b>En ucuz</b>" : ""}</div>
+      ${it.promo ? `<div class="promo">${esc(it.promo)}</div>` : ""}${it.note ? `<div class="meta">${esc(it.note)}</div>` : ""}</div>
+    <div class="pr">${it.oldPrice ? `<s>${tl(it.oldPrice)}</s>` : ""}<b>${tl(it.price)}</b>
+      <button class="add" data-add="${esc(it.name)}" aria-label="${esc(it.name)} listeye ekle" title="Listeye ekle">+</button></div></div>`;
+}
+async function runSearch(q) {
+  lastQ = q; $("#sres").innerHTML = `<div class="sk"></div><div class="sk"></div><div class="sk"></div>`;
+  try {
+    const d = await search(q, true);
+    const items = d.items.filter(on);
+    const errs = Object.keys(d.errors || {});
+    const errTxt = errs.length ? `<p class="err">Şu an cevap vermeyen kaynak: ${errs.map((e) => e === "marketfiyati" ? "A101/BİM/ŞOK/Migros/Hakmar" : mk(e).n).join(", ")}</p>` : "";
+    if (!items.length) { $("#sres").innerHTML = errTxt + `<div class="empty"><b>Sonuç yok</b>Başka bir kelime dene (Türkçe karakterle: "süt", "peynir").</div>`; return; }
+    $("#sres").innerHTML = errTxt + `<p class="note">${items.length} sonuç · ucuzdan pahalıya · ${new Date(d.at).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</p>
+      <div class="row" style="margin-bottom:10px"><button class="btn sm alt" id="addq">“${esc(q)}” aramasını listeye ekle</button></div>` + items.slice(0, 60).map((it, i) => card(it, i === 0)).join("");
+    $("#addq").onclick = () => addToList(q);
+  } catch (e) { $("#sres").innerHTML = `<div class="empty"><b>Bağlantı hatası</b>${esc(e.message)} · Yenile düğmesine bas.</div>`; }
+}
+$("#sform").onsubmit = (e) => { e.preventDefault(); const q = $("#q").value.trim(); if (q.length > 1) { $("#q").blur(); runSearch(q); } };
+$("#sres").addEventListener("click", (e) => { const b = e.target.closest("[data-add]"); if (b) { addToList(b.dataset.add); b.textContent = "✓"; } });
+
+/* ---------- list ---------- */
+function addToList(q) {
+  if (!list.some((x) => x.q.toLocaleLowerCase("tr-TR") === q.toLocaleLowerCase("tr-TR"))) list.push({ id: Date.now() + Math.random(), q, qty: 1 });
+  store.set("list", list); badge();
+}
+function badge() { const b = $("#lbadge"); b.hidden = !list.length; b.textContent = list.length; }
+let priced = store.get("priced", {});
+function renderList() {
+  if (!list.length) { $("#litems").innerHTML = `<div class="empty"><b>Listen boş</b>Yukarıdan ürün ekle ya da aramada + düğmesine bas.</div>`; $("#lsum").innerHTML = ""; return; }
+  $("#litems").innerHTML = list.map((x) => {
+    const p = priced[x.q]; const its = p ? p.items.filter(on) : [];
+    const b = its[0];
+    const alts = its.slice(1, 6).map((a) => `<div class="alt-r"><span>${esc(mk(a.market).n)} · ${esc(a.name)}${a.promo ? ` <span class="promo">${esc(a.promo)}</span>` : ""}</span><b>${tl(a.price)}</b></div>`).join("");
+    return `<div class="card"><div class="li">
+      <div class="qty"><button data-q="-1" data-id="${x.id}" aria-label="Azalt">−</button><span>${x.qty}</span><button data-q="1" data-id="${x.id}" aria-label="Arttır">+</button></div>
+      <div><div class="nm">${esc(x.q)}</div>${b ? `<div class="meta"><span class="mk" style="background:${mk(b.market).c}">${esc(mk(b.market).n)}</span><span>${esc(b.name)}</span></div>${its.some((a) => a.discount && a.promo) ? `<div class="promo">İndirim var: ${esc([...new Set(its.filter((a) => a.discount && a.promo).map((a) => mk(a.market).n))].slice(0,3).join(", "))}</div>` : ""}` : `<div class="meta">${p ? "Eşleşme bulunamadı" : "Fiyat için “Fiyatları getir”"}</div>`}</div>
+      <div class="pr">${b ? `<b>${tl(b.price * x.qty)}</b>` : ""}<button class="del" data-del="${x.id}" aria-label="Sil">✕</button></div></div>
+      ${alts ? `<details><summary>Diğer marketler ▾</summary>${alts}</details>` : ""}</div>`;
+  }).join("");
+  summary();
+}
+function summary() {
+  const rows = list.map((x) => ({ x, its: (priced[x.q]?.items || []).filter(on) })).filter((r) => r.its.length);
+  if (!rows.length) { $("#lsum").innerHTML = ""; return; }
+  const mix = rows.reduce((s, r) => s + r.its[0].price * r.x.qty, 0);
+  const per = {};
+  for (const r of rows) {
+    const seen = {};
+    for (const it of r.its) if (!(it.market in seen)) seen[it.market] = it.price;
+    for (const [m, p] of Object.entries(seen)) { (per[m] ||= { n: 0, t: 0 }); per[m].n++; per[m].t += p * r.x.qty; }
+  }
+  const ms = Object.entries(per).sort((a, b) => b[1].n - a[1].n || a[1].t - b[1].t).slice(0, 6);
+  const stores = [...new Set(rows.map((r) => mk(r.its[0].market).n))];
+  $("#lsum").innerHTML = `<div class="sum"><div style="font-size:14px;opacity:.8">En ucuz kombinasyon (${rows.length}/${list.length} ürün)</div>
+    <div class="big">${tl(mix)}</div><div style="font-size:13px;opacity:.8">${esc(stores.join(" + "))}</div>
+    <table>${ms.map(([m, v]) => `<tr><td>Hepsi ${esc(mk(m).n)}'den <span class="dim">(${v.n}/${rows.length} ürün)</span></td><td>${tl(v.t)}</td></tr>`).join("")}</table></div>`;
+}
+$("#litems").addEventListener("click", (e) => {
+  const q = e.target.closest("[data-q]"), d = e.target.closest("[data-del]");
+  if (q) { const it = list.find((x) => String(x.id) === q.dataset.id); it.qty = Math.max(1, it.qty + Number(q.dataset.q)); }
+  if (d) list = list.filter((x) => String(x.id) !== d.dataset.del);
+  if (q || d) { store.set("list", list); badge(); renderList(); }
+});
+$("#lform").onsubmit = (e) => { e.preventDefault(); const v = $("#li").value.trim(); if (v.length > 1) { addToList(v); $("#li").value = ""; renderList(); } };
+async function priceList() {
+  if (!list.length) return;
+  const btn = $("#lprice"); btn.disabled = true;
+  const seenDisc = store.get("seenDisc", {}); const fresh = [];
+  let i = 0; const qs = list.map((x) => x.q);
+  const worker = async () => { while (i < qs.length) { const q = qs[i++]; btn.textContent = `Getiriliyor… ${i}/${qs.length}`;
+    try { priced[q] = await search(q, true); for (const it of priced[q].items.filter(on)) if (it.discount && it.promo) { const k = q + "|" + it.market + "|" + it.name + "|" + it.price; if (!seenDisc[k]) { seenDisc[k] = 1; fresh.push(`${q}: ${mk(it.market).n} ${tl(it.price)}`); } } } catch {} } };
+  await Promise.all([worker(), worker(), worker()]);
+  store.set("priced", priced); store.set("seenDisc", seenDisc);
+  btn.disabled = false; btn.textContent = "Fiyatları getir";
+  $("#lnote").textContent = `Son güncelleme: ${new Date().toLocaleString("tr-TR",{dateStyle:"short",timeStyle:"short"})}`;
+  renderList();
+  if (fresh.length) {
+    $("#upd").innerHTML = `<div class="banner"><span>Listende yeni indirim: ${esc(fresh.slice(0, 2).join(" · "))}${fresh.length > 2 ? ` +${fresh.length - 2}` : ""}</span></div>`;
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification("Market Fiyat: listende indirim", { body: fresh.slice(0, 3).join("\n"), icon: "icon-180.png" }); } catch {}
+  }
+}
+$("#lprice").onclick = priceList;
+$("#notif").onclick = async () => {
+  if (!("Notification" in window)) { $("#lnote").textContent = "Bu tarayıcı bildirim desteklemiyor. iPhone'da önce Ana Ekrana ekle."; return; }
+  const p = await Notification.requestPermission();
+  $("#lnote").textContent = p === "granted" ? "Bildirimler açık: uygulamayı açıp fiyatları getirdiğinde listendeki yeni indirimler bildirilecek." : "Bildirim izni verilmedi.";
+};
+
+/* ---------- katalog ---------- */
+$("#kmarket").innerHTML = Object.entries(M).filter(([k]) => !["metro","macrocenter","bizimtoptan"].includes(k)).map(([k, v]) => `<option value="${k}" ${k === "anpa" ? "selected" : ""}>${v.n}</option>`).join("");
+async function loadKatalog() {
+  try {
+    const a = await fetch(`${API}?action=ai-status`, { headers: H }).then((r) => r.json());
+    $("#kai").innerHTML = a.ready ? "" : `<div class="banner"><span>Yapay zekâ okuma için anahtar henüz eklenmedi. Uygulamanın sahibi Supabase'e <b>GEMINI_API_KEY</b> ekleyince bu bölüm çalışır.</span></div>`;
+    const s = await fetch(`${API}?action=catalog-status`, { headers: H }).then((r) => r.json());
+    $("#kstat").innerHTML = Array.isArray(s) && s.length ? `<div class="card"><b>Kayıtlı kataloglar</b>${s.map((c) => `<div class="alt-r"><span>${esc(mk(c.market).n)} · ${c.pages.length} sayfa · ${c.items} ürün</span><b>${c.valid_to ? esc(c.valid_to.split("-").reverse().join(".")) + "'e kadar" : ""}</b></div>`).join("")}</div>` : "";
+  } catch {}
+}
+function toJpeg(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(); const u = URL.createObjectURL(file);
+    img.onload = () => { const s = Math.min(1, 2000 / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); res(c.toDataURL("image/jpeg", 0.88).split(",")[1]); };
+    img.onerror = () => rej(new Error("Görsel açılamadı")); img.src = u;
+  });
+}
+$("#kfile").onchange = async (e) => {
+  const files = [...e.target.files]; if (!files.length) return;
+  const market = $("#kmarket").value; const out = $("#kout"); out.innerHTML = "";
+  for (const [i, f] of files.entries()) {
+    const box = document.createElement("div"); box.className = "card"; box.innerHTML = `<b>${esc(f.name)}</b><p class="note">Yapay zekâ okuyor…</p>`; out.appendChild(box);
+    try {
+      const image = await toJpeg(f);
+      const r = await fetch(`${API}?action=read`, { method: "POST", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify({ image, mime: "image/jpeg", market: mk(market).n }) }).then((x) => x.json());
+      if (r.error) throw new Error(r.message || r.error);
+      const today = new Date().toISOString().slice(0, 10);
+      box.innerHTML = `<b>${esc(f.name)}</b> · ${r.items.length} ürün okundu
+        <label class="f">Geçerlilik bitişi</label><input class="in" type="date" value="${esc(r.valid_to || "")}" data-vt>
+        <table class="ed">${r.items.map((it) => `<tr><td><input value="${esc(it.name)}" data-n aria-label="Ürün adı"></td><td class="p"><input value="${it.price}" inputmode="decimal" data-p aria-label="Fiyat"></td><td style="width:36px"><button class="del" data-rm aria-label="Satırı sil">✕</button></td></tr>`).join("")}</table>
+        <div class="row" style="margin-top:10px"><button class="btn sm" data-save>Kaydet</button><span class="note" data-msg></span></div>`;
+      box.querySelector("table").onclick = (ev) => { const b = ev.target.closest("[data-rm]"); if (b) b.closest("tr").remove(); };
+      box.querySelector("[data-save]").onclick = async (ev) => {
+        const items = [...box.querySelectorAll("tr")].map((tr) => ({ name: tr.querySelector("[data-n]").value.trim(), price: Number(tr.querySelector("[data-p]").value.replace(",", ".")) })).filter((x) => x.name && x.price > 0);
+        const vt = box.querySelector("[data-vt]").value || null;
+        ev.target.disabled = true;
+        try {
+          const s = await fetch(`${API}?action=save`, { method: "POST", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify({ market, catalog_url: `upload:${market}:${vt || today}`, page: Date.now() % 1e9 + i, valid_from: r.valid_from || null, valid_to: vt, items }) }).then((x) => x.json());
+          if (s.error) throw new Error(s.error);
+          box.querySelector("[data-msg]").textContent = `${s.saved} ürün kaydedildi ✓`; loadKatalog();
+        } catch (er) { ev.target.disabled = false; box.querySelector("[data-msg]").textContent = "Hata: " + er.message; }
+      };
+    } catch (er) { box.innerHTML = `<b>${esc(f.name)}</b><p class="err">${esc(er.message)}</p>`; }
+  }
+  e.target.value = "";
+};
+
+/* ---------- start ---------- */
+chips(); badge(); route(); checkUpdate(false);
+}
+</script>
+</body>
+</html>
